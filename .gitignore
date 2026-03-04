@@ -1,0 +1,32 @@
+# Build artifacts
+bin/
+coverage.out
+*.test
+
+# Web dashboard build output (keep directory, ignore built files)
+web/dist/*
+!web/dist/.gitkeep
+web/node_modules/
+
+# Development TLS certificates
+certs/
+*.pem
+*.crt
+*.key
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime data directories (not committed)
+.sangraha/
+data/
+meta.db
+audit.log
+
+# Go workspace files
+go.work
+go.work.sum
