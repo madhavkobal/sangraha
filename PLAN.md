@@ -25,7 +25,7 @@ This document is the authoritative development roadmap for sangraha. It breaks t
    - [Sprint 2.2 — Encryption & Presigned URLs](#sprint-22--encryption--presigned-urls)
    - [Sprint 2.3 — Lifecycle, Tagging & CORS](#sprint-23--lifecycle-tagging--cors)
    - [Sprint 2.4 — Rate Limiting & Audit Log](#sprint-24--rate-limiting--audit-log)
-   - [Sprint 2.5 — Web Dashboard](#sprint-25--web-dashboard)
+   - [Sprint 2.5 — Web Administration Console](#sprint-25--web-administration-console)
    - [Sprint 2.6 — Production Release](#sprint-26--production-release)
 5. [Phase 3 — Scale & Enterprise](#5-phase-3--scale--enterprise)
    - [Sprint 3.1 — Quotas & Event Notifications](#sprint-31--quotas--event-notifications)
@@ -488,36 +488,161 @@ Critical edge cases to handle:
 
 ---
 
-### Sprint 2.5 — Web Dashboard
+### Sprint 2.5 — Web Administration Console
 
-**Goal:** An embedded React SPA served on the admin port for visual management.
+**Goal:** A full-featured, embedded web console for administration, live configuration management, real-time monitoring, and server management — served from the admin port with no external CDN dependencies.
 
-#### Tasks
+This sprint is split into five work areas that can be parallelised across frontend and backend tracks:
+
+```
+2.5-A  Backend APIs for console       (Go — prerequisite for all UI tracks)
+2.5-B  Frontend infrastructure         (React/Vite/shadcn setup + auth shell)
+2.5-C  Monitoring & Observability UI   (depends on 2.5-A + 2.5-B)
+2.5-D  Storage Management UI           (depends on 2.5-A + 2.5-B)
+2.5-E  Administration UI               (depends on 2.5-A + 2.5-B)
+2.5-F  Configuration & Server Mgmt UI  (depends on 2.5-A + 2.5-B)
+```
+
+---
+
+#### Track A — Backend APIs for the Console
+
+New Admin REST endpoints required before the UI can be built. Add to `internal/api/admin/`.
+
+| # | Task | Endpoint | Notes |
+|---|---|---|---|
+| 2.5-A1 | Server-sent events log stream | `GET /admin/v1/logs/stream` | SSE; streams live structured log lines as JSON events; `?level=` filter; use a ring-buffer broadcaster so slow clients are dropped gracefully |
+| 2.5-A2 | Config read endpoint | `GET /admin/v1/config` | Return current effective config as JSON (mask all secret values with `"***"`) |
+| 2.5-A3 | Config write endpoint | `PUT /admin/v1/config` | Accept partial JSON patch; validate before applying; hot-reload non-TLS settings without restart; return `{"restart_required": true}` for settings that need a restart |
+| 2.5-A4 | Config validate endpoint | `POST /admin/v1/config/validate` | Dry-run only; parse and validate the submitted config; return structured errors per field |
+| 2.5-A5 | TLS certificate info endpoint | `GET /admin/v1/tls` | Return: subject, issuer, expiry, fingerprint (SHA-256), days-until-expiry, is-self-signed |
+| 2.5-A6 | TLS certificate renewal endpoint | `POST /admin/v1/tls/renew` | Regenerate self-signed cert and reload TLS config without restart |
+| 2.5-A7 | Server control endpoint | `POST /admin/v1/server/reload` | Hot-reload config from disk; return new effective config |
+| 2.5-A8 | Active connections endpoint | `GET /admin/v1/connections` | Return count of active HTTP/1.1 and HTTP/2 connections, per-port breakdown |
+| 2.5-A9 | GC endpoint with progress | `POST /admin/v1/gc` + `GET /admin/v1/gc/status` | GC runs async; status endpoint returns `{ "running": true, "scanned": N, "deleted": N, "freed_bytes": N }` |
+| 2.5-A10 | Export/import endpoints | `POST /admin/v1/export`, `POST /admin/v1/import` | Export streams a tar.gz of data + metadata; import accepts same; both report progress via SSE |
+| 2.5-A11 | Alert rules CRUD | `GET/POST/DELETE /admin/v1/alerts` | Threshold-based alerts on metrics (e.g., disk > 80%, error rate > 1%); stored in bbolt; evaluated every 60s |
+| 2.5-A12 | Alert notifications endpoint | `GET /admin/v1/alerts/history` | Last 100 fired alerts with timestamp, rule name, value, resolved status |
+| 2.5-A13 | Snapshot / backup schedule | `GET/PUT /admin/v1/backup/schedule` | Cron expression + destination path; triggers an export on schedule |
+| 2.5-A14 | Write unit + integration tests for all new endpoints | `internal/api/admin/*_test.go` | SSE test: connect, emit 5 log lines, assert client receives all 5; config test: PUT invalid config returns structured errors |
+
+---
+
+#### Track B — Frontend Infrastructure
 
 | # | Task | Notes |
 |---|---|---|
-| 2.5-1 | Bootstrap React 18 + TypeScript + Vite project in `web/` | `npm create vite@latest` with React+TS template |
-| 2.5-2 | Configure Tailwind CSS and shadcn/ui | Install and configure per shadcn docs; dark mode via `class` strategy |
-| 2.5-3 | Implement typed API client in `web/src/api/` | Thin `fetch` wrappers over Admin REST API; typed request/response DTOs |
-| 2.5-4 | Implement **Dashboard page** | Storage usage gauge (bytes used / total); request rate chart (Prometheus data polled every 30s); top-5 buckets by size |
-| 2.5-5 | Implement **Buckets page** | List all buckets with size, object count, versioning status; create bucket dialog; delete bucket with typed confirmation modal |
-| 2.5-6 | Implement **Objects page** | Breadcrumb object browser; prefix navigation; file upload (drag-and-drop + button); download; delete; metadata viewer sidebar |
-| 2.5-7 | Implement **Users page** | List users; create user (shows access key + secret once in modal); delete user; rotate key |
-| 2.5-8 | Implement **Audit Log page** | Virtualized table (TanStack Virtual); filter by date range, user, bucket, action; export to CSV |
-| 2.5-9 | Implement **Settings page** | Read-only view of current server config (from `/admin/v1/info`); TLS status; log level selector (calls admin API) |
-| 2.5-10 | Add login page with bearer token auth | JWT stored in `sessionStorage`; auto-redirect to login on 401 |
-| 2.5-11 | Wire `//go:embed` to include `web/dist` in binary | `internal/web/embed.go`; serve from admin chi router under `/` |
-| 2.5-12 | Add `make web` to Makefile and wire into CI | Run `npm run build` before Go build |
-| 2.5-13 | Write Playwright E2E tests for critical flows | Create bucket, upload object, verify in browser, delete |
+| 2.5-B1 | Bootstrap React 18 + TypeScript + Vite project in `web/` | `npm create vite@latest` with React+TS template |
+| 2.5-B2 | Configure Tailwind CSS and shadcn/ui | Dark mode via `class` strategy; system-preference default |
+| 2.5-B3 | Set up TanStack Router for type-safe routing | Routes: `/`, `/buckets`, `/buckets/:name`, `/objects/:bucket/*key`, `/users`, `/monitoring`, `/config`, `/audit`, `/alerts` |
+| 2.5-B4 | Implement typed API client in `web/src/api/` | Thin `fetch` wrappers with typed request/response DTOs; interceptor for 401 → redirect to login |
+| 2.5-B5 | Implement SSE client hook `useLogStream()` | Reconnects automatically on disconnect; exposes `lines: LogLine[]` and `connected: boolean` |
+| 2.5-B6 | Implement login page with bearer token auth | JWT stored in `sessionStorage`; form with access key + secret; exchanges for admin JWT via `POST /admin/v1/auth` |
+| 2.5-B7 | Implement app shell: sidebar nav, breadcrumb, notification bell, dark-mode toggle | Sidebar items: Overview, Buckets, Objects, Users, Monitoring, Alerts, Configuration, Audit Log, Server |
+| 2.5-B8 | Wire `//go:embed` to include `web/dist` in binary | `internal/web/embed.go`; serve from admin chi router under `/`; SPA fallback route returns `index.html` |
+| 2.5-B9 | Add `make web` target and wire into CI | Run `npm ci && npm run build` before Go build |
+
+---
+
+#### Track C — Monitoring & Observability
+
+| # | Task | Page / Component | Notes |
+|---|---|---|---|
+| 2.5-C1 | **Overview page** — storage KPIs | `pages/Overview.tsx` | Cards: total objects, total bytes used, bucket count, active users; auto-refresh every 30s via TanStack Query |
+| 2.5-C2 | **Overview page** — request rate & error rate charts | `pages/Overview.tsx` | Line charts (Recharts) of req/s and error % over last 1h / 24h / 7d; data polled from `/admin/v1/metrics` (Prometheus text → parsed in-browser) |
+| 2.5-C3 | **Overview page** — top-10 buckets by size and by request count | `pages/Overview.tsx` | Horizontal bar chart; click row to navigate to bucket detail |
+| 2.5-C4 | **Overview page** — latency percentile chart | `pages/Overview.tsx` | P50 / P95 / P99 read and write latency; sourced from `sangraha_request_duration_seconds` histogram |
+| 2.5-C5 | **Monitoring page** — real-time live log viewer | `pages/Monitoring.tsx` | Uses `useLogStream()` SSE hook; auto-scroll to bottom with pause-on-hover; colour-coded by level (debug=grey, info=white, warn=yellow, error=red); filter by level and keyword |
+| 2.5-C6 | **Monitoring page** — active connections panel | `pages/Monitoring.tsx` | Shows active S3 + admin port connections; polls `/admin/v1/connections` every 5s |
+| 2.5-C7 | **Monitoring page** — health check status panel | `pages/Monitoring.tsx` | Shows liveness (`/healthz`) and readiness (`/readyz`) status with last-checked timestamp; red/green indicator |
+| 2.5-C8 | **Monitoring page** — TLS certificate status card | `pages/Monitoring.tsx` | Subject, issuer, expiry countdown (progress bar turns red < 30 days); "Renew Now" button calls `POST /admin/v1/tls/renew` |
+| 2.5-C9 | **Alerts page** — alert rule builder | `pages/Alerts.tsx` | Form: metric selector (disk usage %, error rate %, req/s), threshold, comparison operator, notification label; saves via admin API |
+| 2.5-C10 | **Alerts page** — alert history table | `pages/Alerts.tsx` | Virtualized table; columns: fired_at, rule, value, resolved_at; badge colours by severity |
+| 2.5-C11 | Write Playwright tests for monitoring flows | `test/e2e/monitoring.spec.ts` | Assert live log lines appear in viewer; assert health panel shows green; assert TLS expiry card renders |
+
+---
+
+#### Track D — Storage Management
+
+| # | Task | Page / Component | Notes |
+|---|---|---|---|
+| 2.5-D1 | **Buckets page** — bucket list | `pages/Buckets.tsx` | Columns: name, region, object count, size, versioning, ACL, created; sortable; search/filter bar |
+| 2.5-D2 | **Buckets page** — create bucket dialog | `pages/Buckets.tsx` | Fields: name, region, versioning, ACL, encryption default; client-side name validation (S3 rules) |
+| 2.5-D3 | **Buckets page** — bucket settings drawer | `pages/Buckets.tsx` | Tabs: Versioning, ACL, Encryption, Lifecycle rules, CORS rules, Notifications, Website hosting; each tab is a live read+edit form |
+| 2.5-D4 | **Buckets page** — lifecycle rule editor | `components/LifecycleRuleEditor.tsx` | Visual form: filter (prefix, tags), expiration (days/date), transitions; renders current rules as a timeline diagram |
+| 2.5-D5 | **Buckets page** — CORS rule editor | `components/CorsRuleEditor.tsx` | Table of allowed origins, methods, headers; add/remove rows inline |
+| 2.5-D6 | **Objects page** — breadcrumb browser | `pages/Objects.tsx` | Prefix-based navigation; virtual-scroll list; columns: key, size, last-modified, ETag, storage class, version count |
+| 2.5-D7 | **Objects page** — file upload | `pages/Objects.tsx` | Drag-and-drop zone + browse button; multi-file queue with individual progress bars; uses multipart API for files > 5MB |
+| 2.5-D8 | **Objects page** — object detail sidebar | `pages/Objects.tsx` | Shows: all metadata, tags editor, version history list, presigned URL generator (copy to clipboard, configurable expiry) |
+| 2.5-D9 | **Objects page** — bulk operations | `pages/Objects.tsx` | Checkbox selection; toolbar: download selected (zip), delete selected (typed confirmation), copy to bucket |
+| 2.5-D10 | Write Playwright tests for storage flows | `test/e2e/storage.spec.ts` | Create bucket, upload 3 files, list, download one, delete one, delete bucket |
+
+---
+
+#### Track E — User Administration
+
+| # | Task | Page / Component | Notes |
+|---|---|---|---|
+| 2.5-E1 | **Users page** — user list | `pages/Users.tsx` | Columns: username, access key (masked), created, last-used, quota used/total; sortable |
+| 2.5-E2 | **Users page** — create user dialog | `pages/Users.tsx` | Fields: username, optional per-user quota; shows generated access key + secret key once in modal with copy button; never retrievable again |
+| 2.5-E3 | **Users page** — user detail drawer | `pages/Users.tsx` | Tabs: Access Keys (list + rotate), Attached Policies, Storage Usage chart (bytes over time) |
+| 2.5-E4 | **Users page** — inline policy editor | `components/PolicyEditor.tsx` | JSON editor with syntax highlight (CodeMirror 6); validate button calls `POST /admin/v1/config/validate`; save button applies policy |
+| 2.5-E5 | **Audit Log page** — searchable log viewer | `pages/AuditLog.tsx` | Virtualized table (TanStack Virtual); filters: date range, user, bucket, action, status code; export to CSV / JSON; deep-link to specific request ID |
+| 2.5-E6 | Write Playwright tests for user admin flows | `test/e2e/users.spec.ts` | Create user, rotate key, verify old key fails, verify new key works, delete user |
+
+---
+
+#### Track F — Configuration & Server Management
+
+| # | Task | Page / Component | Notes |
+|---|---|---|---|
+| 2.5-F1 | **Configuration page** — full config viewer | `pages/Configuration.tsx` | Renders current effective config as a structured tree (not raw YAML); secret fields show `***` with an "eye" icon that requires re-authentication to reveal (future) |
+| 2.5-F2 | **Configuration page** — inline config editor | `pages/Configuration.tsx` | Edit config values in-place via form fields grouped by section (Server, Storage, Auth, Logging, Limits); change detection highlights modified fields |
+| 2.5-F3 | **Configuration page** — validate + apply workflow | `pages/Configuration.tsx` | "Validate" button calls `POST /admin/v1/config/validate` and shows per-field errors inline; "Apply" button calls `PUT /admin/v1/config`; displays banner if `restart_required: true` |
+| 2.5-F4 | **Configuration page** — config diff view | `pages/Configuration.tsx` | Before applying, show a diff modal (green = added/changed, red = removed) between current and proposed config |
+| 2.5-F5 | **Configuration page** — config history | `pages/Configuration.tsx` | Last 20 applied config changes stored in bbolt with timestamp + admin user; click to view or revert |
+| 2.5-F6 | **Server page** — server info panel | `pages/Server.tsx` | Version, build time, uptime, Go runtime (goroutines, GC pause, heap), OS (CPU, memory); auto-refreshes every 10s |
+| 2.5-F7 | **Server page** — TLS management | `pages/Server.tsx` | Certificate details (subject, expiry, fingerprint); upload custom cert (PEM paste or file); renew self-signed cert; download current cert |
+| 2.5-F8 | **Server page** — storage backend panel | `pages/Server.tsx` | Current backend type + data dir; disk usage breakdown (used, available, reserved); I/O stats (reads/s, writes/s, bytes/s) polled every 5s |
+| 2.5-F9 | **Server page** — garbage collection | `pages/Server.tsx` | "Run GC" button with typed confirmation; live progress bar polling `/admin/v1/gc/status`; last run summary (objects scanned, deleted, bytes freed) |
+| 2.5-F10 | **Server page** — backup & restore | `pages/Server.tsx` | Schedule form (cron expression + destination path); "Export Now" triggers immediate export and streams download; "Import" file picker with progress bar |
+| 2.5-F11 | **Server page** — config reload | `pages/Server.tsx` | "Reload Config from Disk" button; shows diff between running config and on-disk config before confirming |
+| 2.5-F12 | Write Playwright tests for configuration flows | `test/e2e/config.spec.ts` | Edit log level → validate → apply → verify live log output changes; attempt invalid config → verify error shown inline |
+
+---
 
 #### Acceptance Criteria
 
-- Dashboard loads with no external CDN requests (verified with browser devtools Network tab)
-- File upload works for files up to 100MB (uses multipart API for large files)
-- Confirmation modal requires typing the bucket/object name to proceed with delete
-- Dark mode is default; respects `prefers-color-scheme`
-- All API errors display inline with the raw error code
-- Binary size increase from embedding web assets < 5MB (Vite tree-shaking + minification)
+**Infrastructure**
+- Console loads with zero external CDN requests (Network tab: no third-party origins)
+- Login with invalid credentials returns inline error; valid credentials land on Overview page
+- 401 from any API call redirects to login without losing the current URL (restored after re-login)
+- Dark mode default; respects `prefers-color-scheme`; user preference persisted in `localStorage`
+- Binary size increase from embedded web assets < 8MB (Vite tree-shaking + minification + gzip)
+
+**Monitoring**
+- Live log viewer receives and displays server log lines within 2s of emission
+- SSE connection automatically reconnects within 5s after network interruption
+- Overview charts render from Prometheus data without a separate Prometheus server
+- TLS expiry card turns red when cert expires in < 30 days; "Renew Now" succeeds
+
+**Storage Management**
+- File upload works for files up to 5GB (multipart API; progress tracked per part)
+- Presigned URL generated in UI is valid and accessible without `Authorization` header
+- Bulk delete requires typing the string `delete N objects` in the confirmation dialog
+- Lifecycle rule editor round-trips correctly with `aws s3api get-bucket-lifecycle-configuration`
+
+**Configuration**
+- Invalid config shows per-field error messages (not a single generic error)
+- Config diff view accurately highlights every changed field before apply
+- Config history retains last 20 changes; revert restores previous effective config
+- Settings requiring restart display a banner; restart is a separate explicit action
+
+**Administration**
+- Secret key shown exactly once at user creation; not retrievable from any API afterward
+- GC progress updates in real-time; page stays responsive during GC run
+- Audit log export to CSV includes all filtered rows (not just visible rows)
+- All destructive actions (delete user, delete bucket, revert config) require typed confirmation
 
 ---
 
@@ -741,7 +866,14 @@ Required ADRs to write before Phase 1 code is written:
 - ADR-002: bbolt as metadata store
 - ADR-003: Local filesystem as default backend
 - ADR-004: SigV4 as the only authentication mechanism for S3 API
-- ADR-005: Embedded web dashboard vs. separate service
+- ADR-005: Embedded web console vs. separate service
+
+Required ADRs to write before Sprint 2.5:
+- ADR-006: TanStack Router vs. React Router for the admin console
+- ADR-007: Recharts vs. Nivo for metrics visualisation
+- ADR-008: CodeMirror 6 for inline config / policy editing
+- ADR-009: SSE vs. WebSocket for live log streaming (decision: SSE — simpler, works through HTTP/2, no upgrade handshake)
+- ADR-010: Config change history storage — bbolt ring-buffer vs. append-only log
 
 ### Community & Governance
 
@@ -787,9 +919,17 @@ Sprint 1.3 (S3 API Layer)    Sprint 1.4 (Auth & TLS)
               Sprint 2.4 (Rate Limiting + Audit)
                    │
                    ▼
-              Sprint 2.5 (Web Dashboard)
+              Sprint 2.5-A (Backend APIs for Console)  ← must land before UI tracks
                    │
-                   ▼
+          ┌────────┼──────────────┐
+          ▼        ▼              ▼
+       S2.5-B   S2.5-C        S2.5-D          S2.5-E  S2.5-F
+    (Frontend (Monitoring  (Storage Mgmt)   (User    (Config &
+      Infra)   & Alerts)                    Admin)   Server Mgmt)
+          │        │              │              │       │
+          └────────┴──────────────┴──────────────┴───────┘
+                                  │
+                                  ▼
               Sprint 2.6 (Production → v1.0.0)
                    │
           ┌────────┼────────┐
