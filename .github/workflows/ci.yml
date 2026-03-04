@@ -19,9 +19,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache: true
+          # cache requires go.sum; disable until external deps are added in Sprint 1.1
+          cache: false
 
       - name: Download modules
+        # Only meaningful once go.sum exists (Sprint 1.1+); safe no-op before then
         run: go mod download
 
       - name: go vet
@@ -30,7 +32,8 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60.0
+          # Use latest stable release; avoids 404s from pinning non-existent versions
+          version: latest
           args: --timeout=5m
 
       - name: Unit tests (with race detector)
@@ -70,7 +73,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache: true
+          cache: false
 
       - name: Download binary artifact
         uses: actions/download-artifact@v4
@@ -83,7 +86,7 @@ jobs:
 
       - name: Run integration tests
         run: ./scripts/integration-test.sh
-        # Script will be created in Sprint 1.6; skips gracefully if not present
+        # Full implementation lands in Sprint 1.6; placeholder exits 0
         continue-on-error: true
 
   web:
@@ -98,25 +101,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          # cache and cache-dependency-path are omitted until web/package.json exists
+          # (Sprint 2.5-B); adding them without the lockfile causes a workflow error.
 
       - name: Install dependencies
         run: |
           if [ -f web/package.json ]; then
             cd web && npm ci
           else
-            echo "web/package.json not yet present — skipping"
+            echo "web/package.json not yet present — skipping (Sprint 2.5-B)"
           fi
 
       - name: Lint
         run: |
           if [ -f web/package.json ]; then
             cd web && npm run lint
+          else
+            echo "No web source — skipping lint"
           fi
 
       - name: Build
         run: |
           if [ -f web/package.json ]; then
             cd web && npm run build
+          else
+            echo "No web source — skipping build"
           fi
