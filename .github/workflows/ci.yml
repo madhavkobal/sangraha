@@ -30,7 +30,7 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           # Use latest stable release; avoids 404s from pinning non-existent versions
           version: latest
