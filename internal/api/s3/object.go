@@ -12,11 +12,17 @@ import (
 	"github.com/madhavkobal/sangraha/internal/storage"
 )
 
-// putObject handles PUT /{bucket}/{key} — PutObject.
+// putObject handles PUT /{bucket}/{key} — PutObject and PUT subresources.
 func (h *Handler) putObject(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
 	// Multipart UploadPart is also a PUT with ?partNumber&uploadId.
-	if r.URL.Query().Has("uploadId") {
+	if q.Has("uploadId") {
 		h.uploadPart(w, r)
+		return
+	}
+	// Phase 2: object tagging.
+	if q.Has("tagging") {
+		h.putObjectTagging(w, r)
 		return
 	}
 	// CopyObject uses x-amz-copy-source header.
@@ -32,17 +38,25 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request) {
 	size := r.ContentLength
 	ct := r.Header.Get("Content-Type")
 
+	// SSE algorithm from request header.
+	sseAlg := r.Header.Get("x-amz-server-side-encryption")
+
 	// Collect user metadata (x-amz-meta-* headers).
 	userMeta := extractUserMeta(r)
 
+	// Tags from x-amz-tagging header.
+	tags := extractTagsFromQuery(r)
+
 	out, err := h.engine.PutObject(r.Context(), storage.PutObjectInput{
-		Bucket:      bucket,
-		Key:         key,
-		Body:        r.Body,
-		Size:        size,
-		ContentType: ct,
-		Owner:       identity.Owner,
-		UserMeta:    userMeta,
+		Bucket:       bucket,
+		Key:          key,
+		Body:         r.Body,
+		Size:         size,
+		ContentType:  ct,
+		Owner:        identity.Owner,
+		UserMeta:     userMeta,
+		Tags:         tags,
+		SSEAlgorithm: sseAlg,
 	})
 	if err != nil {
 		switch err.(type) {
@@ -54,15 +68,31 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("ETag", out.ETag)
+	if out.VersionID != "" {
+		w.Header().Set("x-amz-version-id", out.VersionID)
+	}
+	if out.SSEAlgorithm != "" {
+		w.Header().Set("x-amz-server-side-encryption", out.SSEAlgorithm)
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
-// getObject handles GET /{bucket}/{key} — GetObject.
+// getObject handles GET /{bucket}/{key} — GetObject, and GET subresources.
 func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if q.Has("tagging") {
+		h.getObjectTagging(w, r)
+		return
+	}
+
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "*")
 
-	out, err := h.engine.GetObject(r.Context(), storage.GetObjectInput{Bucket: bucket, Key: key})
+	out, err := h.engine.GetObject(r.Context(), storage.GetObjectInput{
+		Bucket:    bucket,
+		Key:       key,
+		VersionID: q.Get("versionId"),
+	})
 	if err != nil {
 		if isObjectNotFound(err) {
 			writeError(w, r, http.StatusNotFound, "NoSuchKey", "The specified key does not exist")
@@ -84,6 +114,12 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Last-Modified", rec.LastModified.UTC().Format(http.TimeFormat))
 	for k, v := range rec.UserMeta {
 		w.Header().Set("x-amz-meta-"+k, v)
+	}
+	if rec.VersionID != "" {
+		w.Header().Set("x-amz-version-id", rec.VersionID)
+	}
+	if rec.SSEAlgorithm != "" {
+		w.Header().Set("x-amz-server-side-encryption", rec.SSEAlgorithm)
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, out.Body)
@@ -117,24 +153,43 @@ func (h *Handler) headObject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// deleteObject handles DELETE /{bucket}/{key} — DeleteObject.
+// deleteObject handles DELETE /{bucket}/{key} — DeleteObject (and DELETE subresources).
 func (h *Handler) deleteObject(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
 	// Multipart abort is DELETE with ?uploadId.
-	if r.URL.Query().Has("uploadId") {
+	if q.Has("uploadId") {
 		h.abortMultipartUpload(w, r)
+		return
+	}
+	// Phase 2: delete object tags.
+	if q.Has("tagging") {
+		h.deleteObjectTagging(w, r)
 		return
 	}
 
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "*")
+	identity := identityFromContext(r.Context())
 
-	if err := h.engine.DeleteObject(r.Context(), bucket, key); err != nil {
+	out, err := h.engine.DeleteObject(r.Context(), storage.DeleteObjectInput{
+		Bucket:    bucket,
+		Key:       key,
+		VersionID: q.Get("versionId"),
+		Owner:     identity.Owner,
+	})
+	if err != nil {
 		if isBucketNotFound(err) {
 			writeError(w, r, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist")
 			return
 		}
 		writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
 		return
+	}
+	if out.VersionID != "" {
+		w.Header().Set("x-amz-version-id", out.VersionID)
+	}
+	if out.DeleteMarker {
+		w.Header().Set("x-amz-delete-marker", "true")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

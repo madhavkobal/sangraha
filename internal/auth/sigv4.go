@@ -172,7 +172,13 @@ func canonicalHeaders(r *http.Request, signedHeaderNames []string) (headers, sig
 	copy(sorted, signedHeaderNames)
 	sort.Strings(sorted)
 	for _, name := range sorted {
-		val := strings.TrimSpace(r.Header.Get(name))
+		// In Go's net/http, the Host header is stored in r.Host, not r.Header.
+		var val string
+		if strings.ToLower(name) == "host" {
+			val = r.Host
+		} else {
+			val = strings.TrimSpace(r.Header.Get(name))
+		}
 		sb.WriteString(strings.ToLower(name) + ":" + val + "\n")
 	}
 	return sb.String(), strings.Join(sorted, ";")

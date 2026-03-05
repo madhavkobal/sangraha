@@ -21,6 +21,7 @@ import (
 var (
 	bucketsBucket   = []byte("buckets")
 	objectsBucket   = []byte("objects")
+	versionsBucket  = []byte("versions")
 	multipartBucket = []byte("multipart")
 	partsBucket     = []byte("parts")
 	keysBucket      = []byte("keys")
@@ -38,7 +39,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("bbolt open %s: %w", path, err)
 	}
 	if err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range [][]byte{bucketsBucket, objectsBucket, multipartBucket, partsBucket, keysBucket} {
+		for _, name := range [][]byte{bucketsBucket, objectsBucket, versionsBucket, multipartBucket, partsBucket, keysBucket} {
 			if _, cerr := tx.CreateBucketIfNotExists(name); cerr != nil {
 				return fmt.Errorf("create bucket %s: %w", name, cerr)
 			}
@@ -224,6 +225,133 @@ func (s *Store) UpdateBucketStats(_ context.Context, bucket string, deltaCount, 
 			return fmt.Errorf("bbolt: marshal bucket: %w", err)
 		}
 		return bkt.Put([]byte(bucket), data)
+	})
+}
+
+// --- Versioning operations ---
+
+// versionKey returns the bbolt key for a version record.
+// Format: bucket\x00key\x00versionID
+func versionKey(bucket, key, versionID string) string {
+	return bucket + "\x00" + key + "\x00" + versionID
+}
+
+// versionPrefix returns the prefix for all versions of bucket/key.
+func versionPrefix(bucket, key string) string {
+	return bucket + "\x00" + key + "\x00"
+}
+
+// PutVersion stores a version record.
+func (s *Store) PutVersion(_ context.Context, v metadata.VersionRecord) error {
+	return s.put(versionsBucket, versionKey(v.Bucket, v.Key, v.VersionID), v)
+}
+
+// GetVersion returns a specific version record.
+func (s *Store) GetVersion(_ context.Context, bucket, key, versionID string) (metadata.VersionRecord, error) {
+	var v metadata.VersionRecord
+	err := s.get(versionsBucket, versionKey(bucket, key, versionID), &v)
+	return v, err
+}
+
+// ListVersions returns all versions of bucket/key, newest first.
+func (s *Store) ListVersions(_ context.Context, bucket, key string) ([]metadata.VersionRecord, error) {
+	prefix := versionPrefix(bucket, key)
+	var out []metadata.VersionRecord
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(versionsBucket)
+		c := bkt.Cursor()
+		for k, v := c.Seek([]byte(prefix)); k != nil && strings.HasPrefix(string(k), prefix); k, v = c.Next() {
+			var rec metadata.VersionRecord
+			if err := json.Unmarshal(v, &rec); err != nil {
+				return fmt.Errorf("bbolt: unmarshal version: %w", err)
+			}
+			out = append(out, rec)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].LastModified.After(out[j].LastModified)
+	})
+	return out, nil
+}
+
+// ListBucketVersions returns all versions in a bucket for ListObjectVersions.
+func (s *Store) ListBucketVersions(_ context.Context, bucket string, opts metadata.ListOptions) ([]metadata.VersionRecord, error) {
+	if opts.MaxKeys <= 0 {
+		opts.MaxKeys = 1000
+	}
+	prefix := bucket + "\x00" + opts.Prefix
+	var out []metadata.VersionRecord
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(versionsBucket)
+		c := bkt.Cursor()
+		for k, v := c.Seek([]byte(prefix)); k != nil && strings.HasPrefix(string(k), prefix); k, v = c.Next() {
+			var rec metadata.VersionRecord
+			if err := json.Unmarshal(v, &rec); err != nil {
+				return fmt.Errorf("bbolt: unmarshal version: %w", err)
+			}
+			out = append(out, rec)
+			if len(out) >= opts.MaxKeys {
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Key != out[j].Key {
+			return out[i].Key < out[j].Key
+		}
+		return out[i].LastModified.After(out[j].LastModified)
+	})
+	return out, nil
+}
+
+// DeleteVersion removes a specific version record.
+func (s *Store) DeleteVersion(_ context.Context, bucket, key, versionID string) error {
+	return s.delete(versionsBucket, versionKey(bucket, key, versionID))
+}
+
+// MarkVersionsNotLatest marks all existing versions of bucket/key as not latest.
+func (s *Store) MarkVersionsNotLatest(_ context.Context, bucket, key string) error {
+	prefix := versionPrefix(bucket, key)
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(versionsBucket)
+		c := bkt.Cursor()
+		var updates []struct {
+			key []byte
+			val []byte
+		}
+		for k, v := c.Seek([]byte(prefix)); k != nil && strings.HasPrefix(string(k), prefix); k, v = c.Next() {
+			var rec metadata.VersionRecord
+			if err := json.Unmarshal(v, &rec); err != nil {
+				return fmt.Errorf("bbolt: unmarshal version: %w", err)
+			}
+			if rec.IsLatest {
+				rec.IsLatest = false
+				data, err := json.Marshal(rec)
+				if err != nil {
+					return fmt.Errorf("bbolt: marshal version: %w", err)
+				}
+				keyCopy := make([]byte, len(k))
+				copy(keyCopy, k)
+				updates = append(updates, struct {
+					key []byte
+					val []byte
+				}{keyCopy, data})
+			}
+		}
+		for _, u := range updates {
+			if err := bkt.Put(u.key, u.val); err != nil {
+				return fmt.Errorf("bbolt: put version: %w", err)
+			}
+		}
+		return nil
 	})
 }
 

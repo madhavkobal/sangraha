@@ -28,36 +28,82 @@ func (e *ObjectNotFoundError) Error() string {
 
 // PutObjectInput carries all the parameters for a PutObject operation.
 type PutObjectInput struct {
-	Bucket      string
-	Key         string
-	Body        io.Reader
-	Size        int64
-	ContentType string
-	Owner       string
-	UserMeta    map[string]string
+	Bucket       string
+	Key          string
+	Body         io.Reader
+	Size         int64
+	ContentType  string
+	Owner        string
+	UserMeta     map[string]string
+	Tags         map[string]string
+	SSEAlgorithm string // "AES256" or ""
 }
 
 // PutObjectOutput carries the result of a successful PutObject.
 type PutObjectOutput struct {
 	ETag         string
+	VersionID    string
 	LastModified time.Time
 	Size         int64
+	SSEAlgorithm string
 }
 
-// PutObject stores an object and its metadata.
+// PutObject stores an object and its metadata. When the bucket has versioning
+// enabled a new version ID is generated; otherwise the existing object is
+// overwritten.
 func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOutput, error) {
-	// Validate that the bucket exists.
-	exists, err := e.meta.BucketExists(ctx, in.Bucket)
+	bucketRec, err := e.meta.GetBucket(ctx, in.Bucket)
 	if err != nil {
+		if isNotFound(err) {
+			return PutObjectOutput{}, &BucketNotFoundError{Name: in.Bucket}
+		}
 		return PutObjectOutput{}, fmt.Errorf("put object: check bucket: %w", err)
 	}
-	if !exists {
-		return PutObjectOutput{}, &BucketNotFoundError{Name: in.Bucket}
+
+	// Server-side encryption: if requested, wrap the reader.
+	body := in.Body
+	var encryptedKey []byte
+	sseAlg := in.SSEAlgorithm
+	if sseAlg == "" && bucketRec.SSEAlgorithm != "" {
+		sseAlg = bucketRec.SSEAlgorithm
+	}
+	if sseAlg == "AES256" && masterKey != nil {
+		objectKey, kerr := GenerateObjectKey()
+		if kerr != nil {
+			return PutObjectOutput{}, fmt.Errorf("put object: sse generate key: %w", kerr)
+		}
+		encryptedKey, kerr = EncryptKey(objectKey)
+		if kerr != nil {
+			return PutObjectOutput{}, fmt.Errorf("put object: sse encrypt key: %w", kerr)
+		}
+		pr, pw := io.Pipe()
+		go func() {
+			ew, werr := NewEncryptingWriter(pw, objectKey)
+			if werr != nil {
+				pw.CloseWithError(werr)
+				return
+			}
+			_, werr = io.Copy(ew, in.Body)
+			if werr == nil {
+				werr = ew.Close()
+			}
+			pw.CloseWithError(werr)
+		}()
+		body = pr
+	}
+
+	// Determine backend storage key.
+	versioning := bucketRec.Versioning
+	var versionID string
+	backendKey := in.Key
+	if versioning == VersioningEnabled {
+		versionID = newVersionID()
+		backendKey = versionedBackendKey(in.Key, versionID)
 	}
 
 	// Wrap the body in a hash reader to compute the ETag while streaming.
-	hr := newHashReader(in.Body)
-	n, err := e.backend.Write(ctx, in.Bucket, in.Key, hr, in.Size)
+	hr := newHashReader(body)
+	n, err := e.backend.Write(ctx, in.Bucket, backendKey, hr, in.Size)
 	if err != nil {
 		return PutObjectOutput{}, fmt.Errorf("put object: write: %w", err)
 	}
@@ -69,42 +115,62 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 	}
 	now := time.Now().UTC()
 
-	// Check if the object already exists to compute stat delta.
+	// Compute stat delta.
 	var deltaCount, deltaBytes int64
-	old, err := e.meta.GetObject(ctx, in.Bucket, in.Key)
-	if err == nil {
-		// Overwrite: same count, adjust byte delta.
-		deltaBytes = n - old.Size
-	} else {
+	if versioning == VersioningEnabled {
 		deltaCount = 1
 		deltaBytes = n
+	} else {
+		old, oerr := e.meta.GetObject(ctx, in.Bucket, in.Key)
+		if oerr == nil {
+			deltaBytes = n - old.Size
+		} else {
+			deltaCount = 1
+			deltaBytes = n
+		}
 	}
 
 	rec := metadata.ObjectRecord{
-		Bucket:       in.Bucket,
-		Key:          in.Key,
-		Size:         n,
-		ETag:         etag,
-		ContentType:  ct,
-		LastModified: now,
-		Owner:        in.Owner,
-		UserMeta:     in.UserMeta,
-		StorageClass: "STANDARD",
+		Bucket:          in.Bucket,
+		Key:             in.Key,
+		VersionID:       versionID,
+		IsLatest:        versioning == VersioningEnabled,
+		Size:            n,
+		ETag:            etag,
+		ContentType:     ct,
+		LastModified:    now,
+		Owner:           in.Owner,
+		UserMeta:        in.UserMeta,
+		StorageClass:    "STANDARD",
+		Tags:            in.Tags,
+		SSEAlgorithm:    sseAlg,
+		SSEEncryptedKey: encryptedKey,
 	}
+
+	// For versioned buckets, mark existing versions as not latest.
+	if versioning == VersioningEnabled {
+		if merr := e.meta.MarkVersionsNotLatest(ctx, in.Bucket, in.Key); merr != nil {
+			return PutObjectOutput{}, fmt.Errorf("put object: mark not latest: %w", merr)
+		}
+		if merr := e.putVersionRecord(ctx, rec, versionID, true); merr != nil {
+			return PutObjectOutput{}, fmt.Errorf("put object: store version: %w", merr)
+		}
+	}
+
 	if err = e.meta.PutObject(ctx, rec); err != nil {
 		return PutObjectOutput{}, fmt.Errorf("put object: store metadata: %w", err)
 	}
 	if err = e.meta.UpdateBucketStats(ctx, in.Bucket, deltaCount, deltaBytes); err != nil {
-		// Non-fatal: stats are best-effort.
-		_ = err
+		_ = err // non-fatal
 	}
-	return PutObjectOutput{ETag: etag, LastModified: now, Size: n}, nil
+	return PutObjectOutput{ETag: etag, VersionID: versionID, LastModified: now, Size: n, SSEAlgorithm: sseAlg}, nil
 }
 
 // GetObjectInput carries the parameters for a GetObject operation.
 type GetObjectInput struct {
-	Bucket string
-	Key    string
+	Bucket    string
+	Key       string
+	VersionID string // optional; if set, retrieves the specific version
 }
 
 // GetObjectOutput carries the result of a GetObject.
@@ -114,7 +180,12 @@ type GetObjectOutput struct {
 }
 
 // GetObject retrieves an object's metadata and returns a reader for its body.
+// If versionID is set in GetObjectInput, the specified version is returned.
 func (e *Engine) GetObject(ctx context.Context, in GetObjectInput) (GetObjectOutput, error) {
+	if in.VersionID != "" {
+		return e.GetObjectVersion(ctx, in.Bucket, in.Key, in.VersionID)
+	}
+
 	rec, err := e.meta.GetObject(ctx, in.Bucket, in.Key)
 	if err != nil {
 		if isNotFound(err) {
@@ -123,12 +194,36 @@ func (e *Engine) GetObject(ctx context.Context, in GetObjectInput) (GetObjectOut
 		return GetObjectOutput{}, fmt.Errorf("get object: metadata: %w", err)
 	}
 
+	// Determine backend key (versioned objects use version-keyed path).
+	backendKey := in.Key
+	if rec.VersionID != "" {
+		backendKey = versionedBackendKey(in.Key, rec.VersionID)
+	}
+
 	pr, pw := io.Pipe()
 	go func() {
-		rerr := e.backend.Read(ctx, in.Bucket, in.Key, pw)
+		rerr := e.backend.Read(ctx, in.Bucket, backendKey, pw)
 		pw.CloseWithError(rerr)
 	}()
-	return GetObjectOutput{Record: rec, Body: pr}, nil
+
+	var body io.ReadCloser = pr
+
+	// SSE decryption.
+	if rec.SSEAlgorithm == "AES256" && len(rec.SSEEncryptedKey) > 0 && masterKey != nil {
+		objectKey, kerr := DecryptKey(rec.SSEEncryptedKey)
+		if kerr != nil {
+			_ = pr.CloseWithError(kerr)
+			return GetObjectOutput{}, fmt.Errorf("get object: sse decrypt key: %w", kerr)
+		}
+		dr, kerr := NewDecryptingReader(pr, objectKey)
+		if kerr != nil {
+			_ = pr.CloseWithError(kerr)
+			return GetObjectOutput{}, fmt.Errorf("get object: sse decrypting reader: %w", kerr)
+		}
+		body = io.NopCloser(dr)
+	}
+
+	return GetObjectOutput{Record: rec, Body: body}, nil
 }
 
 // HeadObject returns the object metadata without reading the body.
@@ -143,26 +238,71 @@ func (e *Engine) HeadObject(ctx context.Context, bucket, key string) (metadata.O
 	return rec, nil
 }
 
-// DeleteObject removes an object and its metadata.
-func (e *Engine) DeleteObject(ctx context.Context, bucket, key string) error {
-	rec, err := e.meta.GetObject(ctx, bucket, key)
-	if err != nil {
-		if isNotFound(err) {
-			return nil // idempotent
+// DeleteObjectInput carries parameters for a DeleteObject call.
+type DeleteObjectInput struct {
+	Bucket    string
+	Key       string
+	VersionID string // if set, permanently deletes that version
+	Owner     string
+}
+
+// DeleteObjectOutput carries the result of a DeleteObject call.
+type DeleteObjectOutput struct {
+	VersionID    string // version ID of the delete marker (versioned buckets)
+	DeleteMarker bool
+}
+
+// DeleteObject removes an object and its metadata. For versioned buckets a
+// delete marker is created unless VersionID is specified (permanent delete).
+func (e *Engine) DeleteObject(ctx context.Context, in DeleteObjectInput) (DeleteObjectOutput, error) {
+	if in.VersionID != "" {
+		// Permanent deletion of a specific version.
+		if err := e.DeleteObjectVersion(ctx, in.Bucket, in.Key, in.VersionID); err != nil {
+			return DeleteObjectOutput{}, err
 		}
-		return fmt.Errorf("delete object: metadata get: %w", err)
+		return DeleteObjectOutput{VersionID: in.VersionID}, nil
 	}
 
-	if err = e.backend.Delete(ctx, bucket, key); err != nil {
+	bkt, err := e.meta.GetBucket(ctx, in.Bucket)
+	if err != nil {
+		if isNotFound(err) {
+			return DeleteObjectOutput{}, nil // idempotent
+		}
+		return DeleteObjectOutput{}, fmt.Errorf("delete object: get bucket: %w", err)
+	}
+
+	// Versioning-enabled: create delete marker.
+	if bkt.Versioning == VersioningEnabled {
+		vid, merr := e.putDeleteMarker(ctx, in.Bucket, in.Key, in.Owner)
+		if merr != nil {
+			return DeleteObjectOutput{}, fmt.Errorf("delete object: put delete marker: %w", merr)
+		}
+		return DeleteObjectOutput{VersionID: vid, DeleteMarker: true}, nil
+	}
+
+	// Non-versioned: delete normally.
+	rec, err := e.meta.GetObject(ctx, in.Bucket, in.Key)
+	if err != nil {
+		if isNotFound(err) {
+			return DeleteObjectOutput{}, nil // idempotent
+		}
+		return DeleteObjectOutput{}, fmt.Errorf("delete object: metadata get: %w", err)
+	}
+
+	backendKey := in.Key
+	if rec.VersionID != "" {
+		backendKey = versionedBackendKey(in.Key, rec.VersionID)
+	}
+	if err = e.backend.Delete(ctx, in.Bucket, backendKey); err != nil {
 		if !isBackendNotFound(err) {
-			return fmt.Errorf("delete object: backend: %w", err)
+			return DeleteObjectOutput{}, fmt.Errorf("delete object: backend: %w", err)
 		}
 	}
-	if err = e.meta.DeleteObject(ctx, bucket, key); err != nil {
-		return fmt.Errorf("delete object: metadata delete: %w", err)
+	if err = e.meta.DeleteObject(ctx, in.Bucket, in.Key); err != nil {
+		return DeleteObjectOutput{}, fmt.Errorf("delete object: metadata delete: %w", err)
 	}
-	_ = e.meta.UpdateBucketStats(ctx, bucket, -1, -rec.Size)
-	return nil
+	_ = e.meta.UpdateBucketStats(ctx, in.Bucket, -1, -rec.Size)
+	return DeleteObjectOutput{}, nil
 }
 
 // CopyObject copies src to dst, potentially across buckets.
@@ -228,10 +368,10 @@ func (e *Engine) ListObjects(ctx context.Context, bucket string, opts metadata.L
 }
 
 // DeleteObjects deletes multiple objects. Returns per-object results.
-func (e *Engine) DeleteObjects(ctx context.Context, bucket string, keys []string) (deleted []string, errs map[string]error) {
+func (e *Engine) DeleteObjects(ctx context.Context, bucket string, keys []string, owner string) (deleted []string, errs map[string]error) {
 	errs = make(map[string]error)
 	for _, key := range keys {
-		if err := e.DeleteObject(ctx, bucket, key); err != nil {
+		if _, err := e.DeleteObject(ctx, DeleteObjectInput{Bucket: bucket, Key: key, Owner: owner}); err != nil {
 			errs[key] = err
 		} else {
 			deleted = append(deleted, key)

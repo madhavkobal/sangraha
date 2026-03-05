@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/madhavkobal/sangraha/internal/audit"
 	"github.com/madhavkobal/sangraha/internal/auth"
 	"github.com/madhavkobal/sangraha/internal/backend/localfs"
+	"github.com/madhavkobal/sangraha/internal/metadata"
 	metabbolt "github.com/madhavkobal/sangraha/internal/metadata/bbolt"
 	"github.com/madhavkobal/sangraha/internal/storage"
 	"github.com/madhavkobal/sangraha/pkg/s3types"
@@ -19,6 +21,8 @@ import (
 
 // testServer creates a full S3 handler backed by in-process stores.
 // It returns the handler and an access key pre-registered in the key store.
+// The key is inserted with an empty SigningKey so the auth middleware skips
+// full SigV4 verification, allowing tests to use a minimal fake auth header.
 func testServer(t *testing.T) (http.Handler, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -35,9 +39,20 @@ func testServer(t *testing.T) (http.Handler, string) {
 
 	engine := storage.New(be, meta, "root")
 	ks := auth.NewKeyStore(meta)
-	ak, _, err := ks.CreateKey(context.Background(), "root", true)
-	if err != nil {
-		t.Fatalf("CreateKey: %v", err)
+
+	// Insert a test key with no SigningKey — the middleware skips full SigV4
+	// verification when SigningKey is empty, so fake auth headers work in tests.
+	ak := "TESTKEY1234567890AB"
+	rec := metadata.AccessKeyRecord{
+		AccessKey:  ak,
+		SecretHash: "$2a$12$invalid-hash-for-test-only",
+		SigningKey:  "", // empty → skip SigV4 verification in middleware
+		Owner:      "root",
+		CreatedAt:  time.Now().UTC(),
+		IsRoot:     true,
+	}
+	if err := meta.PutAccessKey(context.Background(), rec); err != nil {
+		t.Fatalf("PutAccessKey: %v", err)
 	}
 
 	// Audit logger that discards output (empty path = discard).
@@ -46,13 +61,15 @@ func testServer(t *testing.T) (http.Handler, string) {
 		t.Fatalf("audit.New: %v", err)
 	}
 
-	handler := New(engine, ks, auditor)
+	handler := New(engine, ks, auditor, 1000)
 	return handler, ak
 }
 
 // authHeader builds a minimal AWS4-HMAC-SHA256 Authorization header for the given access key.
+// Works because testServer inserts the key with empty SigningKey (no signature verification).
 func authHeader(ak string) string {
-	return "AWS4-HMAC-SHA256 Credential=" + ak + "/20260305/us-east-1/s3/aws4_request,SignedHeaders=host,Signature=fakesig"
+	date := time.Now().UTC().Format("20060102")
+	return "AWS4-HMAC-SHA256 Credential=" + ak + "/" + date + "/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=fakesig"
 }
 
 func TestListBuckets(t *testing.T) {

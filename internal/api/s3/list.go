@@ -13,18 +13,35 @@ import (
 const defaultMaxKeys = 1000
 
 // listObjects handles GET /{bucket} — dispatches based on query parameters.
-// list-type=2 → ListObjectsV2; versions → ListObjectVersions (not yet
-// implemented, returns V1 format); otherwise → legacy ListObjects (V1).
 func (h *Handler) listObjects(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	q := r.URL.Query()
 
-	if q.Get("list-type") == "2" {
+	// Phase 2 subresource dispatch.
+	switch {
+	case q.Has("versioning"):
+		h.getBucketVersioning(w, r, bucket)
+	case q.Has("versions"):
+		h.listObjectVersions(w, r, bucket)
+	case q.Has("cors"):
+		h.getBucketCORS(w, r, bucket)
+	case q.Has("policy"):
+		h.getBucketPolicy(w, r, bucket)
+	case q.Has("lifecycle"):
+		h.getBucketLifecycle(w, r, bucket)
+	case q.Has("tagging"):
+		h.getBucketTagging(w, r, bucket)
+	case q.Has("encryption"):
+		h.getBucketEncryption(w, r, bucket)
+	case q.Has("acl"):
+		h.getBucketACL(w, r, bucket)
+	case q.Has("uploads"):
+		h.listMultipartUploads(w, r, bucket)
+	case q.Get("list-type") == "2":
 		h.listObjectsV2(w, r, bucket)
-		return
+	default:
+		h.listObjectsV1(w, r, bucket)
 	}
-	// Legacy ListObjects V1 (also used as fallback for ?versions in Phase 1).
-	h.listObjectsV1(w, r, bucket)
 }
 
 // listObjectsV2 implements ListObjectsV2 (list-type=2 or default).

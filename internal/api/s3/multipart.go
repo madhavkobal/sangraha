@@ -140,6 +140,39 @@ func (h *Handler) abortMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listMultipartUploads handles GET /{bucket}?uploads.
+func (h *Handler) listMultipartUploads(w http.ResponseWriter, r *http.Request, bucket string) {
+	uploads, err := h.engine.ListMultipartUploads(r.Context(), bucket)
+	if err != nil {
+		if isBucketNotFound(err) {
+			writeError(w, r, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist")
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
+		return
+	}
+
+	type Upload struct {
+		Key      string `xml:"Key"`
+		UploadID string `xml:"UploadId"`
+		Initiated string `xml:"Initiated"`
+	}
+	type ListMultipartUploadsResult struct {
+		XMLName xml.Name `xml:"ListMultipartUploadsResult"`
+		Bucket  string   `xml:"Bucket"`
+		Uploads []Upload `xml:"Upload"`
+	}
+	result := ListMultipartUploadsResult{Bucket: bucket}
+	for _, u := range uploads {
+		result.Uploads = append(result.Uploads, Upload{
+			Key:       u.Key,
+			UploadID:  u.UploadID,
+			Initiated: u.Initiated.UTC().Format("2006-01-02T15:04:05.000Z"),
+		})
+	}
+	writeXML(w, r, http.StatusOK, result)
+}
+
 func isMultipartNotFound(err error) bool {
 	_, ok := err.(*storage.MultipartNotFoundError)
 	return ok

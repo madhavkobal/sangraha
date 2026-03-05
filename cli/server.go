@@ -144,8 +144,22 @@ func initDeps(ctx context.Context, cfg *config.Config) (*serverDeps, func(), err
 }
 
 func serveUntilSignal(cfg *config.Config, deps *serverDeps) error {
-	s3Handler := s3api.New(deps.engine, deps.keyStore, deps.auditor)
-	adminHandler := adminapi.New(deps.keyStore, "dev", "unknown")
+	rateLimitRPS := cfg.Limits.RateLimitRPS
+	if rateLimitRPS <= 0 {
+		rateLimitRPS = 1000
+	}
+	scheme := "http"
+	if cfg.Server.TLS.Enabled {
+		scheme = "https"
+	}
+	addr := cfg.Server.S3Address
+	if len(addr) > 0 && addr[0] == ':' {
+		addr = "localhost" + addr
+	}
+	serverURL := scheme + "://" + addr
+
+	s3Handler := s3api.New(deps.engine, deps.keyStore, deps.auditor, rateLimitRPS)
+	adminHandler := adminapi.New(deps.keyStore, "dev", "unknown", serverURL)
 
 	s3Srv := newHTTPServer(cfg.Server.S3Address, s3Handler)
 	adminSrv := newHTTPServer(cfg.Server.AdminAddress, adminHandler)

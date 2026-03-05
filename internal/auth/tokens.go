@@ -29,7 +29,8 @@ func NewKeyStore(meta metadata.Store) *KeyStore {
 }
 
 // CreateKey generates a new random access key + secret key pair, stores the
-// bcrypt hash of the secret, and returns the plaintext secret (shown once).
+// bcrypt hash and the plaintext signing key, and returns the plaintext secret
+// (shown once). The plaintext signing key is required for SigV4 verification.
 func (ks *KeyStore) CreateKey(ctx context.Context, owner string, isRoot bool) (accessKey, secretKey string, err error) {
 	accessKey, err = randomBase62(20)
 	if err != nil {
@@ -46,6 +47,7 @@ func (ks *KeyStore) CreateKey(ctx context.Context, owner string, isRoot bool) (a
 	rec := metadata.AccessKeyRecord{
 		AccessKey:  accessKey,
 		SecretHash: string(hash),
+		SigningKey:  secretKey, // stored for SigV4 verification
 		Owner:      owner,
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     isRoot,
@@ -66,6 +68,7 @@ func (ks *KeyStore) UpsertKey(ctx context.Context, accessKey, secretKey, owner s
 	rec := metadata.AccessKeyRecord{
 		AccessKey:  accessKey,
 		SecretHash: string(hash),
+		SigningKey:  secretKey, // stored for SigV4 verification
 		Owner:      owner,
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     isRoot,

@@ -78,14 +78,14 @@ func TestDeleteObject(t *testing.T) {
 		Bucket: "bucket", Key: "del-key",
 		Body: strings.NewReader("x"), Size: 1, Owner: "root",
 	})
-	if err := e.DeleteObject(ctx, "bucket", "del-key"); err != nil {
+	if _, err := e.DeleteObject(ctx, DeleteObjectInput{Bucket: "bucket", Key: "del-key", Owner: "root"}); err != nil {
 		t.Fatalf("DeleteObject: %v", err)
 	}
 	if _, err := e.HeadObject(ctx, "bucket", "del-key"); err == nil {
 		t.Error("object still exists after delete")
 	}
 	// Delete again should be idempotent.
-	if err := e.DeleteObject(ctx, "bucket", "del-key"); err != nil {
+	if _, err := e.DeleteObject(ctx, DeleteObjectInput{Bucket: "bucket", Key: "del-key", Owner: "root"}); err != nil {
 		t.Errorf("Delete (idempotent): %v", err)
 	}
 }
@@ -226,7 +226,7 @@ func TestDeleteObjects(t *testing.T) {
 			Body: strings.NewReader("x"), Size: 1, Owner: "root",
 		})
 	}
-	deleted, errs := e.DeleteObjects(ctx, "bucket", []string{"k1", "k2"})
+	deleted, errs := e.DeleteObjects(ctx, "bucket", []string{"k1", "k2"}, "root")
 	if len(deleted) != 2 {
 		t.Errorf("deleted = %d; want 2", len(deleted))
 	}

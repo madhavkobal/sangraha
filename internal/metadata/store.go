@@ -9,27 +9,79 @@ import (
 
 // BucketRecord holds the persisted metadata for a bucket.
 type BucketRecord struct {
-	Name        string    `json:"name"`
-	CreatedAt   time.Time `json:"created_at"`
-	Owner       string    `json:"owner"`
-	Region      string    `json:"region"`
-	Versioning  string    `json:"versioning"` // "disabled" | "enabled" | "suspended"
-	ACL         string    `json:"acl"`
-	ObjectCount int64     `json:"object_count"`
-	TotalBytes  int64     `json:"total_bytes"`
+	Name           string            `json:"name"`
+	CreatedAt      time.Time         `json:"created_at"`
+	Owner          string            `json:"owner"`
+	Region         string            `json:"region"`
+	Versioning     string            `json:"versioning"` // "disabled" | "enabled" | "suspended"
+	ACL            string            `json:"acl"`
+	ObjectCount    int64             `json:"object_count"`
+	TotalBytes     int64             `json:"total_bytes"`
+	Policy         string            `json:"policy,omitempty"`          // JSON bucket policy
+	CORSRules      []CORSRule        `json:"cors_rules,omitempty"`      // per-bucket CORS
+	LifecycleRules []LifecycleRule   `json:"lifecycle_rules,omitempty"` // expiration rules
+	Tags           map[string]string `json:"tags,omitempty"`            // bucket tags
+	SSEAlgorithm   string            `json:"sse_algorithm,omitempty"`   // "AES256" or ""
+}
+
+// CORSRule describes an S3-compatible CORS rule.
+type CORSRule struct {
+	ID             string   `json:"id,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins"`
+	AllowedMethods []string `json:"allowed_methods"`
+	AllowedHeaders []string `json:"allowed_headers,omitempty"`
+	ExposeHeaders  []string `json:"expose_headers,omitempty"`
+	MaxAgeSeconds  int      `json:"max_age_seconds,omitempty"`
+}
+
+// LifecycleRule describes an S3-compatible lifecycle rule.
+type LifecycleRule struct {
+	ID                              string           `json:"id"`
+	Status                          string           `json:"status"` // "Enabled" | "Disabled"
+	Filter                          LifecycleFilter  `json:"filter"`
+	ExpirationDays                  int              `json:"expiration_days,omitempty"`
+	ExpirationDate                  *time.Time       `json:"expiration_date,omitempty"`
+	NoncurrentVersionExpirationDays int              `json:"noncurrent_version_expiration_days,omitempty"`
+	AbortIncompleteMultipartDays    int              `json:"abort_incomplete_multipart_days,omitempty"`
+}
+
+// LifecycleFilter selects objects for a lifecycle rule.
+type LifecycleFilter struct {
+	Prefix string            `json:"prefix,omitempty"`
+	Tags   map[string]string `json:"tags,omitempty"`
 }
 
 // ObjectRecord holds the persisted metadata for a stored object.
 type ObjectRecord struct {
-	Bucket       string            `json:"bucket"`
-	Key          string            `json:"key"`
-	Size         int64             `json:"size"`
-	ETag         string            `json:"etag"`
-	ContentType  string            `json:"content_type"`
-	LastModified time.Time         `json:"last_modified"`
-	Owner        string            `json:"owner"`
-	UserMeta     map[string]string `json:"user_meta,omitempty"`
-	StorageClass string            `json:"storage_class"`
+	Bucket          string            `json:"bucket"`
+	Key             string            `json:"key"`
+	VersionID       string            `json:"version_id,omitempty"`
+	IsDeleteMarker  bool              `json:"is_delete_marker,omitempty"`
+	IsLatest        bool              `json:"is_latest,omitempty"`
+	Size            int64             `json:"size"`
+	ETag            string            `json:"etag"`
+	ContentType     string            `json:"content_type"`
+	LastModified    time.Time         `json:"last_modified"`
+	Owner           string            `json:"owner"`
+	UserMeta        map[string]string `json:"user_meta,omitempty"`
+	StorageClass    string            `json:"storage_class"`
+	Tags            map[string]string `json:"tags,omitempty"`
+	SSEAlgorithm    string            `json:"sse_algorithm,omitempty"`    // "AES256"
+	SSEEncryptedKey []byte            `json:"sse_encrypted_key,omitempty"` // per-object key, AES-GCM encrypted
+}
+
+// VersionRecord tracks a specific version of an object.
+type VersionRecord struct {
+	Bucket         string    `json:"bucket"`
+	Key            string    `json:"key"`
+	VersionID      string    `json:"version_id"`
+	IsDeleteMarker bool      `json:"is_delete_marker"`
+	IsLatest       bool      `json:"is_latest"`
+	ETag           string    `json:"etag,omitempty"`
+	Size           int64     `json:"size,omitempty"`
+	LastModified   time.Time `json:"last_modified"`
+	Owner          string    `json:"owner"`
+	StorageClass   string    `json:"storage_class,omitempty"`
 }
 
 // MultipartRecord tracks an in-progress multipart upload.
@@ -56,6 +108,7 @@ type PartRecord struct {
 type AccessKeyRecord struct {
 	AccessKey  string    `json:"access_key"`  //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 	SecretHash string    `json:"secret_hash"` // bcrypt hash
+	SigningKey  string    `json:"signing_key"` // plaintext for SigV4 (Phase 3: encrypt at rest)
 	Owner      string    `json:"owner"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsRoot     bool      `json:"is_root"`
@@ -91,6 +144,21 @@ type Store interface {
 	// UpdateBucketStats atomically adjusts the object count and byte total
 	// for a bucket. Pass negative values to decrement.
 	UpdateBucketStats(ctx context.Context, bucket string, deltaCount, deltaBytes int64) error
+
+	// --- Versioning operations ---
+
+	// PutVersion stores a version record for a versioned object.
+	PutVersion(ctx context.Context, v VersionRecord) error
+	// GetVersion returns a specific version record.
+	GetVersion(ctx context.Context, bucket, key, versionID string) (VersionRecord, error)
+	// ListVersions returns all versions of bucket/key, newest first.
+	ListVersions(ctx context.Context, bucket, key string) ([]VersionRecord, error)
+	// ListBucketVersions returns all versions in a bucket for ListObjectVersions.
+	ListBucketVersions(ctx context.Context, bucket string, opts ListOptions) ([]VersionRecord, error)
+	// DeleteVersion removes a specific version record.
+	DeleteVersion(ctx context.Context, bucket, key, versionID string) error
+	// MarkVersionsNotLatest marks all existing versions of bucket/key as not latest.
+	MarkVersionsNotLatest(ctx context.Context, bucket, key string) error
 
 	// --- Multipart operations ---
 
@@ -138,7 +206,7 @@ type ListOptions struct {
 
 // ErrNotFound is returned when a record does not exist.
 type ErrNotFound struct {
-	Kind string // "bucket", "object", "multipart", "access_key"
+	Kind string // "bucket", "object", "multipart", "access_key", "version"
 	Name string
 }
 
