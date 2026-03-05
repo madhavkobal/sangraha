@@ -2,8 +2,7 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"github.com/madhavkobal/sangraha/cli"
 )
 
 // Injected at build time via -ldflags.
@@ -13,10 +12,5 @@ var (
 )
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
-		fmt.Printf("sangraha %s (built %s)\n", version, buildTime)
-		return
-	}
-	fmt.Printf("sangraha %s — S3-compatible object storage\n", version)
-	fmt.Println("Run `sangraha --help` for usage.")
+	cli.Execute(version, buildTime)
 }
