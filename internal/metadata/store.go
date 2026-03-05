@@ -54,7 +54,7 @@ type PartRecord struct {
 
 // AccessKeyRecord holds credentials for an access key.
 type AccessKeyRecord struct {
-	AccessKey  string    `json:"access_key"`
+	AccessKey  string    `json:"access_key"` //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 	SecretHash string    `json:"secret_hash"` // bcrypt hash
 	Owner      string    `json:"owner"`
 	CreatedAt  time.Time `json:"created_at"`

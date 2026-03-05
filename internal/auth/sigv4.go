@@ -27,7 +27,7 @@ const (
 
 // VerifiedIdentity carries the authenticated identity extracted from a request.
 type VerifiedIdentity struct {
-	AccessKey string
+	AccessKey string //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 	Owner     string
 	IsRoot    bool
 }

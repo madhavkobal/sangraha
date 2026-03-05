@@ -21,8 +21,8 @@ type createUserRequest struct {
 
 // createUserResponse is the JSON response for a newly created user.
 type createUserResponse struct {
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
+	AccessKey string `json:"access_key"` //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
+	SecretKey string `json:"secret_key"` //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 	Owner     string `json:"owner"`
 }
 
@@ -55,7 +55,7 @@ func (h *userHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type userInfo struct {
-		AccessKey string `json:"access_key"`
+		AccessKey string `json:"access_key"` //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 		Owner     string `json:"owner"`
 		IsRoot    bool   `json:"is_root"`
 	}

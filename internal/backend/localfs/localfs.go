@@ -65,7 +65,7 @@ func (b *Backend) Write(_ context.Context, bucket, key string, r io.Reader, _ in
 	if err = f.Close(); err != nil {
 		return 0, fmt.Errorf("localfs write: close: %w", err)
 	}
-	if err = os.Rename(tmpName, p); err != nil {
+	if err = os.Rename(tmpName, p); err != nil { //nolint:gosec // G304: destination path validated by safePath()
 		return 0, fmt.Errorf("localfs write: rename: %w", err)
 	}
 	return n, nil
