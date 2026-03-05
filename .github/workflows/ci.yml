@@ -18,12 +18,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.22"
-          # cache requires go.sum; disable until external deps are added in Sprint 1.1
+          go-version-file: "go.mod"
           cache: false
 
       - name: Download modules
-        # Only meaningful once go.sum exists (Sprint 1.1+); safe no-op before then
         run: go mod download
 
       - name: go vet
@@ -72,7 +70,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.22"
+          go-version-file: "go.mod"
           cache: false
 
       - name: Download binary artifact
