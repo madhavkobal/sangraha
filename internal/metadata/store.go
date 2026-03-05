@@ -36,13 +36,13 @@ type CORSRule struct {
 
 // LifecycleRule describes an S3-compatible lifecycle rule.
 type LifecycleRule struct {
-	ID                              string           `json:"id"`
-	Status                          string           `json:"status"` // "Enabled" | "Disabled"
-	Filter                          LifecycleFilter  `json:"filter"`
-	ExpirationDays                  int              `json:"expiration_days,omitempty"`
-	ExpirationDate                  *time.Time       `json:"expiration_date,omitempty"`
-	NoncurrentVersionExpirationDays int              `json:"noncurrent_version_expiration_days,omitempty"`
-	AbortIncompleteMultipartDays    int              `json:"abort_incomplete_multipart_days,omitempty"`
+	ID                              string          `json:"id"`
+	Status                          string          `json:"status"` // "Enabled" | "Disabled"
+	Filter                          LifecycleFilter `json:"filter"`
+	ExpirationDays                  int             `json:"expiration_days,omitempty"`
+	ExpirationDate                  *time.Time      `json:"expiration_date,omitempty"`
+	NoncurrentVersionExpirationDays int             `json:"noncurrent_version_expiration_days,omitempty"`
+	AbortIncompleteMultipartDays    int             `json:"abort_incomplete_multipart_days,omitempty"`
 }
 
 // LifecycleFilter selects objects for a lifecycle rule.
@@ -66,7 +66,7 @@ type ObjectRecord struct {
 	UserMeta        map[string]string `json:"user_meta,omitempty"`
 	StorageClass    string            `json:"storage_class"`
 	Tags            map[string]string `json:"tags,omitempty"`
-	SSEAlgorithm    string            `json:"sse_algorithm,omitempty"`    // "AES256"
+	SSEAlgorithm    string            `json:"sse_algorithm,omitempty"`     // "AES256"
 	SSEEncryptedKey []byte            `json:"sse_encrypted_key,omitempty"` // per-object key, AES-GCM encrypted
 }
 
@@ -108,7 +108,7 @@ type PartRecord struct {
 type AccessKeyRecord struct {
 	AccessKey  string    `json:"access_key"`  //nolint:gosec // G101: field name matches pattern but is not a hardcoded credential
 	SecretHash string    `json:"secret_hash"` // bcrypt hash
-	SigningKey  string    `json:"signing_key"` // plaintext for SigV4 (Phase 3: encrypt at rest)
+	SigningKey string    `json:"signing_key"` // plaintext for SigV4 (Phase 3: encrypt at rest)
 	Owner      string    `json:"owner"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsRoot     bool      `json:"is_root"`

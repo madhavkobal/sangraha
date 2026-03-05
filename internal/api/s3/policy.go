@@ -60,7 +60,7 @@ func (h *Handler) getBucketACL(w http.ResponseWriter, r *http.Request, bucket st
 		Permission string      `xml:"Permission"`
 	}
 	type aclResponse struct {
-		Owner  struct {
+		Owner struct {
 			ID          string `xml:"ID"`
 			DisplayName string `xml:"DisplayName"`
 		} `xml:"Owner"`

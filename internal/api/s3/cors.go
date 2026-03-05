@@ -9,17 +9,17 @@ import (
 
 // xmlCORSConfiguration is the XML body for Put/GetBucketCors.
 type xmlCORSConfiguration struct {
-	XMLName   xml.Name       `xml:"CORSConfiguration"`
-	CORSRules []xmlCORSRule  `xml:"CORSRule"`
+	XMLName   xml.Name      `xml:"CORSConfiguration"`
+	CORSRules []xmlCORSRule `xml:"CORSRule"`
 }
 
 type xmlCORSRule struct {
-	ID             string   `xml:"ID,omitempty"`
-	AllowedOrigin  []string `xml:"AllowedOrigin"`
-	AllowedMethod  []string `xml:"AllowedMethod"`
-	AllowedHeader  []string `xml:"AllowedHeader,omitempty"`
-	ExposeHeader   []string `xml:"ExposeHeader,omitempty"`
-	MaxAgeSeconds  int      `xml:"MaxAgeSeconds,omitempty"`
+	ID            string   `xml:"ID,omitempty"`
+	AllowedOrigin []string `xml:"AllowedOrigin"`
+	AllowedMethod []string `xml:"AllowedMethod"`
+	AllowedHeader []string `xml:"AllowedHeader,omitempty"`
+	ExposeHeader  []string `xml:"ExposeHeader,omitempty"`
+	MaxAgeSeconds int      `xml:"MaxAgeSeconds,omitempty"`
 }
 
 func xmlCORSToMeta(cfg xmlCORSConfiguration) []metadata.CORSRule {

@@ -131,25 +131,33 @@ func matchesPrincipal(stmt Statement, principal string) bool {
 	case string:
 		return v == "*" || v == principal
 	case map[string]interface{}:
-		for _, vals := range v {
-			switch vv := vals.(type) {
-			case string:
-				if vv == "*" || vv == principal {
-					return true
-				}
-			case []interface{}:
-				for _, item := range vv {
-					if s, ok := item.(string); ok && (s == "*" || s == principal) {
-						return true
-					}
-				}
-			}
-		}
+		return matchesPrincipalMap(v, principal)
 	case []interface{}:
-		for _, item := range v {
-			if s, ok := item.(string); ok && (s == "*" || s == principal) {
+		return matchesPrincipalSlice(v, principal)
+	}
+	return false
+}
+
+func matchesPrincipalMap(m map[string]interface{}, principal string) bool {
+	for _, vals := range m {
+		switch vv := vals.(type) {
+		case string:
+			if vv == "*" || vv == principal {
 				return true
 			}
+		case []interface{}:
+			if matchesPrincipalSlice(vv, principal) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchesPrincipalSlice(items []interface{}, principal string) bool {
+	for _, item := range items {
+		if s, ok := item.(string); ok && (s == "*" || s == principal) {
+			return true
 		}
 	}
 	return false

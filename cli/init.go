@@ -23,109 +23,99 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
+// initConfig holds the answers collected during the init wizard.
+type initConfig struct {
+	configDir     string
+	dataDir       string
+	metaPath      string
+	s3Addr        string
+	adminAddr     string
+	rootAccessKey string
+	rootSecretKey string
+	sseKey        string
+	tlsEnabled    bool
+	autoSelfSign  bool
+	certFile      string
+	keyFile       string
+}
+
+func runInit(_ *cobra.Command, _ []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("=== sangraha init wizard ===")
 	fmt.Println()
 
-	// --- Config directory ---
+	cfg, err := collectInitAnswers(reader)
+	if err != nil {
+		return err
+	}
+
+	return writeInitFiles(cfg)
+}
+
+// collectInitAnswers interactively prompts the user and returns the filled initConfig.
+func collectInitAnswers(reader *bufio.Reader) (initConfig, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		homeDir = "."
 	}
-	defaultConfigDir := filepath.Join(homeDir, ".sangraha")
 
-	configDir := prompt(reader, fmt.Sprintf("Config directory [%s]: ", defaultConfigDir))
-	if configDir == "" {
-		configDir = defaultConfigDir
-	}
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
+	cfg := initConfig{}
 
-	// --- Data directory ---
-	defaultDataDir := filepath.Join(configDir, "data")
-	dataDir := prompt(reader, fmt.Sprintf("Data directory [%s]: ", defaultDataDir))
-	if dataDir == "" {
-		dataDir = defaultDataDir
-	}
-	if err := os.MkdirAll(dataDir, 0750); err != nil {
-		return fmt.Errorf("create data dir: %w", err)
+	cfg.configDir = promptDefault(reader, "Config directory", filepath.Join(homeDir, ".sangraha"))
+	cfg.configDir = filepath.Clean(cfg.configDir) //nolint:gosec // G304: path is operator-provided
+	if err := os.MkdirAll(cfg.configDir, 0700); err != nil {
+		return initConfig{}, fmt.Errorf("create config dir: %w", err)
 	}
 
-	// --- Metadata path ---
-	defaultMetaPath := filepath.Join(configDir, "meta.db")
-	metaPath := prompt(reader, fmt.Sprintf("Metadata DB path [%s]: ", defaultMetaPath))
-	if metaPath == "" {
-		metaPath = defaultMetaPath
+	cfg.dataDir = promptDefault(reader, "Data directory", filepath.Join(cfg.configDir, "data"))
+	cfg.dataDir = filepath.Clean(cfg.dataDir) //nolint:gosec // G304: path is operator-provided
+	if err := os.MkdirAll(cfg.dataDir, 0750); err != nil {
+		return initConfig{}, fmt.Errorf("create data dir: %w", err)
 	}
 
-	// --- S3 address ---
-	s3Addr := prompt(reader, "S3 API listen address [:9000]: ")
-	if s3Addr == "" {
-		s3Addr = ":9000"
+	cfg.metaPath = promptDefault(reader, "Metadata DB path", filepath.Join(cfg.configDir, "meta.db"))
+	cfg.metaPath = filepath.Clean(cfg.metaPath)
+	cfg.s3Addr = promptDefault(reader, "S3 API listen address", ":9000")
+	cfg.adminAddr = promptDefault(reader, "Admin API listen address", ":9001")
+	cfg.rootAccessKey = promptDefault(reader, "Root access key", "root")
+
+	cfg.rootSecretKey, err = promptOrGenerate(reader, "Root secret key", 32)
+	if err != nil {
+		return initConfig{}, fmt.Errorf("generate secret: %w", err)
 	}
 
-	// --- Admin address ---
-	adminAddr := prompt(reader, "Admin API listen address [:9001]: ")
-	if adminAddr == "" {
-		adminAddr = ":9001"
+	cfg.sseKey, err = promptOrGenerate(reader, "Server-side encryption master key", 32)
+	if err != nil {
+		return initConfig{}, fmt.Errorf("generate SSE key: %w", err)
 	}
 
-	// --- Root access key ---
-	rootAccessKey := prompt(reader, "Root access key [root]: ")
-	if rootAccessKey == "" {
-		rootAccessKey = "root"
-	}
-
-	// --- Root secret key ---
-	rootSecretKey := prompt(reader, "Root secret key (leave blank to generate): ")
-	if rootSecretKey == "" {
-		rootSecretKey, err = generateSecret(32)
-		if err != nil {
-			return fmt.Errorf("generate secret: %w", err)
-		}
-		fmt.Printf("Generated root secret key: %s\n", rootSecretKey)
-		fmt.Println("IMPORTANT: Save this key — it will not be shown again.")
-		fmt.Println()
-	}
-
-	// --- SSE master key ---
-	sseKey := prompt(reader, "Server-side encryption master key (leave blank to generate): ")
-	if sseKey == "" {
-		sseKey, err = generateSecret(32)
-		if err != nil {
-			return fmt.Errorf("generate SSE key: %w", err)
-		}
-		fmt.Printf("Generated SSE master key: %s\n", sseKey)
-		fmt.Println("IMPORTANT: Save this key — it will not be shown again.")
-		fmt.Println()
-	}
-
-	// --- TLS ---
-	tlsEnabled := promptYesNo(reader, "Enable TLS? [y/N]: ")
-	autoSelfSigned := false
-	certFile := ""
-	keyFile := ""
-	if tlsEnabled {
-		autoSelfSigned = promptYesNo(reader, "Auto-generate self-signed certificate? [Y/n]: ")
-		if !autoSelfSigned {
-			certFile = prompt(reader, "TLS certificate file path: ")
-			keyFile = prompt(reader, "TLS key file path: ")
+	cfg.tlsEnabled = promptYesNo(reader, "Enable TLS? [y/N]: ")
+	if cfg.tlsEnabled {
+		cfg.autoSelfSign = promptYesNo(reader, "Auto-generate self-signed certificate? [Y/n]: ")
+		if !cfg.autoSelfSign {
+			cfg.certFile = prompt(reader, "TLS certificate file path: ")
+			cfg.keyFile = prompt(reader, "TLS key file path: ")
 		}
 	}
 
-	// --- Write config ---
-	cfgPath := filepath.Join(configDir, "config.yaml")
-	cfgContent := buildConfig(s3Addr, adminAddr, tlsEnabled, autoSelfSigned, certFile, keyFile, dataDir, metaPath, rootAccessKey)
+	return cfg, nil
+}
+
+// writeInitFiles writes config.yaml and the env credential file.
+func writeInitFiles(cfg initConfig) error {
+	cfgPath := filepath.Join(cfg.configDir, "config.yaml")
+	cfgContent := buildConfig(cfg)
+	//nolint:gosec // G306: config file contains no secrets; credentials go in env file (0600)
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	// --- Write env file ---
-	envPath := filepath.Join(configDir, "env")
-	envContent := fmt.Sprintf("export SANGRAHA_ROOT_SECRET_KEY=%s\nexport SANGRAHA_SSE_MASTER_KEY=%s\n", rootSecretKey, sseKey)
+	envPath := filepath.Join(cfg.configDir, "env")
+	envContent := fmt.Sprintf(
+		"export SANGRAHA_ROOT_SECRET_KEY=%s\nexport SANGRAHA_SSE_MASTER_KEY=%s\n",
+		cfg.rootSecretKey, cfg.sseKey,
+	)
 	if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 		return fmt.Errorf("write env file: %w", err)
 	}
@@ -134,13 +124,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("=== Setup complete ===")
 	fmt.Printf("Config file:  %s\n", cfgPath)
 	fmt.Printf("Credentials:  %s\n", envPath)
-	fmt.Printf("Data dir:     %s\n", dataDir)
-	fmt.Printf("Metadata DB:  %s\n", metaPath)
+	fmt.Printf("Data dir:     %s\n", cfg.dataDir)
+	fmt.Printf("Metadata DB:  %s\n", cfg.metaPath)
 	fmt.Println()
 	fmt.Println("To start the server:")
 	fmt.Printf("  source %s\n", envPath)
 	fmt.Printf("  SANGRAHA_CONFIG=%s sangraha server start\n", cfgPath)
-
 	return nil
 }
 
@@ -150,9 +139,33 @@ func prompt(reader *bufio.Reader, label string) string {
 	return strings.TrimSpace(text)
 }
 
+func promptDefault(reader *bufio.Reader, label, def string) string {
+	v := prompt(reader, fmt.Sprintf("%s [%s]: ", label, def))
+	if v == "" {
+		return def
+	}
+	return v
+}
+
 func promptYesNo(reader *bufio.Reader, label string) bool {
 	answer := strings.ToLower(prompt(reader, label))
 	return answer == "y" || answer == "yes"
+}
+
+// promptOrGenerate prompts for a secret value; if left blank, generates n random bytes.
+func promptOrGenerate(reader *bufio.Reader, label string, n int) (string, error) {
+	v := prompt(reader, label+" (leave blank to generate): ")
+	if v != "" {
+		return v, nil
+	}
+	secret, err := generateSecret(n)
+	if err != nil {
+		return "", err
+	}
+	fmt.Printf("Generated %s: %s\n", strings.ToLower(label), secret)
+	fmt.Println("IMPORTANT: Save this key — it will not be shown again.")
+	fmt.Println()
+	return secret, nil
 }
 
 func generateSecret(n int) (string, error) {
@@ -163,13 +176,13 @@ func generateSecret(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func buildConfig(s3Addr, adminAddr string, tlsEnabled, autoSelfSigned bool, certFile, keyFile, dataDir, metaPath, rootAccessKey string) string {
+func buildConfig(cfg initConfig) string {
 	tlsSection := fmt.Sprintf(`  tls:
     enabled: %v
     auto_self_signed: %v
     cert_file: "%s"
     key_file: "%s"
-`, tlsEnabled, autoSelfSigned, certFile, keyFile)
+`, cfg.tlsEnabled, cfg.autoSelfSign, cfg.certFile, cfg.keyFile)
 
 	return fmt.Sprintf(`# sangraha configuration — generated by 'sangraha init'
 server:
@@ -194,5 +207,5 @@ logging:
 limits:
   max_bucket_count: 1000
   rate_limit_rps: 1000
-`, s3Addr, adminAddr, tlsSection, dataDir, metaPath, rootAccessKey)
+`, cfg.s3Addr, cfg.adminAddr, tlsSection, cfg.dataDir, cfg.metaPath, cfg.rootAccessKey)
 }

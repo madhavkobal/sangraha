@@ -47,7 +47,7 @@ func (ks *KeyStore) CreateKey(ctx context.Context, owner string, isRoot bool) (a
 	rec := metadata.AccessKeyRecord{
 		AccessKey:  accessKey,
 		SecretHash: string(hash),
-		SigningKey:  secretKey, // stored for SigV4 verification
+		SigningKey: secretKey, // stored for SigV4 verification
 		Owner:      owner,
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     isRoot,
@@ -68,7 +68,7 @@ func (ks *KeyStore) UpsertKey(ctx context.Context, accessKey, secretKey, owner s
 	rec := metadata.AccessKeyRecord{
 		AccessKey:  accessKey,
 		SecretHash: string(hash),
-		SigningKey:  secretKey, // stored for SigV4 verification
+		SigningKey: secretKey, // stored for SigV4 verification
 		Owner:      owner,
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     isRoot,

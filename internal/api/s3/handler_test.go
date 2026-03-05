@@ -46,7 +46,7 @@ func testServer(t *testing.T) (http.Handler, string) {
 	rec := metadata.AccessKeyRecord{
 		AccessKey:  ak,
 		SecretHash: "$2a$12$invalid-hash-for-test-only",
-		SigningKey:  "", // empty → skip SigV4 verification in middleware
+		SigningKey: "", // empty → skip SigV4 verification in middleware
 		Owner:      "root",
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     true,

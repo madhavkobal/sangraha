@@ -17,7 +17,7 @@ type presignHandler struct {
 type presignRequest struct {
 	Bucket    string `json:"bucket"`
 	Key       string `json:"key"`
-	Method    string `json:"method"` // "GET" | "PUT"
+	Method    string `json:"method"`     // "GET" | "PUT"
 	ExpiresIn int    `json:"expires_in"` // seconds, max 604800 (7 days)
 	Region    string `json:"region"`
 }

@@ -60,48 +60,13 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 		return PutObjectOutput{}, fmt.Errorf("put object: check bucket: %w", err)
 	}
 
-	// Server-side encryption: if requested, wrap the reader.
-	body := in.Body
-	var encryptedKey []byte
-	sseAlg := in.SSEAlgorithm
-	if sseAlg == "" && bucketRec.SSEAlgorithm != "" {
-		sseAlg = bucketRec.SSEAlgorithm
-	}
-	if sseAlg == "AES256" && masterKey != nil {
-		objectKey, kerr := GenerateObjectKey()
-		if kerr != nil {
-			return PutObjectOutput{}, fmt.Errorf("put object: sse generate key: %w", kerr)
-		}
-		encryptedKey, kerr = EncryptKey(objectKey)
-		if kerr != nil {
-			return PutObjectOutput{}, fmt.Errorf("put object: sse encrypt key: %w", kerr)
-		}
-		pr, pw := io.Pipe()
-		go func() {
-			ew, werr := NewEncryptingWriter(pw, objectKey)
-			if werr != nil {
-				pw.CloseWithError(werr)
-				return
-			}
-			_, werr = io.Copy(ew, in.Body)
-			if werr == nil {
-				werr = ew.Close()
-			}
-			pw.CloseWithError(werr)
-		}()
-		body = pr
+	body, sseAlg, encryptedKey, err := e.applySSE(in, bucketRec.SSEAlgorithm)
+	if err != nil {
+		return PutObjectOutput{}, err
 	}
 
-	// Determine backend storage key.
-	versioning := bucketRec.Versioning
-	var versionID string
-	backendKey := in.Key
-	if versioning == VersioningEnabled {
-		versionID = newVersionID()
-		backendKey = versionedBackendKey(in.Key, versionID)
-	}
+	versionID, backendKey := e.resolveVersioning(in.Key, bucketRec.Versioning)
 
-	// Wrap the body in a hash reader to compute the ETag while streaming.
 	hr := newHashReader(body)
 	n, err := e.backend.Write(ctx, in.Bucket, backendKey, hr, in.Size)
 	if err != nil {
@@ -115,26 +80,13 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 	}
 	now := time.Now().UTC()
 
-	// Compute stat delta.
-	var deltaCount, deltaBytes int64
-	if versioning == VersioningEnabled {
-		deltaCount = 1
-		deltaBytes = n
-	} else {
-		old, oerr := e.meta.GetObject(ctx, in.Bucket, in.Key)
-		if oerr == nil {
-			deltaBytes = n - old.Size
-		} else {
-			deltaCount = 1
-			deltaBytes = n
-		}
-	}
+	deltaCount, deltaBytes := e.computeStatDelta(ctx, in.Bucket, in.Key, n, bucketRec.Versioning)
 
 	rec := metadata.ObjectRecord{
 		Bucket:          in.Bucket,
 		Key:             in.Key,
 		VersionID:       versionID,
-		IsLatest:        versioning == VersioningEnabled,
+		IsLatest:        bucketRec.Versioning == VersioningEnabled,
 		Size:            n,
 		ETag:            etag,
 		ContentType:     ct,
@@ -147,8 +99,7 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 		SSEEncryptedKey: encryptedKey,
 	}
 
-	// For versioned buckets, mark existing versions as not latest.
-	if versioning == VersioningEnabled {
+	if bucketRec.Versioning == VersioningEnabled {
 		if merr := e.meta.MarkVersionsNotLatest(ctx, in.Bucket, in.Key); merr != nil {
 			return PutObjectOutput{}, fmt.Errorf("put object: mark not latest: %w", merr)
 		}
@@ -164,6 +115,64 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 		_ = err // non-fatal
 	}
 	return PutObjectOutput{ETag: etag, VersionID: versionID, LastModified: now, Size: n, SSEAlgorithm: sseAlg}, nil
+}
+
+// applySSE determines the SSE algorithm and wraps the body reader with encryption
+// if SSE is active. Returns the (possibly wrapped) reader, effective algorithm,
+// encrypted object key, and any error.
+func (e *Engine) applySSE(in PutObjectInput, bucketSSEAlg string) (io.Reader, string, []byte, error) {
+	sseAlg := in.SSEAlgorithm
+	if sseAlg == "" {
+		sseAlg = bucketSSEAlg
+	}
+	if sseAlg != "AES256" || masterKey == nil {
+		return in.Body, sseAlg, nil, nil
+	}
+	objectKey, err := GenerateObjectKey()
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("put object: sse generate key: %w", err)
+	}
+	encryptedKey, err := EncryptKey(objectKey)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("put object: sse encrypt key: %w", err)
+	}
+	pr, pw := io.Pipe()
+	go func() {
+		ew, werr := NewEncryptingWriter(pw, objectKey)
+		if werr != nil {
+			pw.CloseWithError(werr)
+			return
+		}
+		_, werr = io.Copy(ew, in.Body)
+		if werr == nil {
+			werr = ew.Close()
+		}
+		pw.CloseWithError(werr)
+	}()
+	return pr, sseAlg, encryptedKey, nil
+}
+
+// resolveVersioning returns the versionID and backend storage key for the object.
+func (e *Engine) resolveVersioning(key, versioning string) (versionID, backendKey string) {
+	if versioning == VersioningEnabled {
+		versionID = newVersionID()
+		backendKey = versionedBackendKey(key, versionID)
+	} else {
+		backendKey = key
+	}
+	return versionID, backendKey
+}
+
+// computeStatDelta returns the (count delta, bytes delta) for bucket stats.
+func (e *Engine) computeStatDelta(ctx context.Context, bucket, key string, n int64, versioning string) (int64, int64) {
+	if versioning == VersioningEnabled {
+		return 1, n
+	}
+	old, oerr := e.meta.GetObject(ctx, bucket, key)
+	if oerr == nil {
+		return 0, n - old.Size
+	}
+	return 1, n
 }
 
 // GetObjectInput carries the parameters for a GetObject operation.

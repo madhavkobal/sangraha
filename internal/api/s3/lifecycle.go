@@ -10,16 +10,16 @@ import (
 
 // xmlLifecycleConfiguration is the XML body for Put/GetBucketLifecycle.
 type xmlLifecycleConfiguration struct {
-	XMLName xml.Name          `xml:"LifecycleConfiguration"`
+	XMLName xml.Name           `xml:"LifecycleConfiguration"`
 	Rules   []xmlLifecycleRule `xml:"Rule"`
 }
 
 type xmlLifecycleRule struct {
-	ID         string             `xml:"ID,omitempty"`
-	Status     string             `xml:"Status"`
-	Filter     xmlLifecycleFilter `xml:"Filter,omitempty"`
-	Expiration *xmlExpiration     `xml:"Expiration,omitempty"`
-	AbortIncompleteMultipartUpload *xmlAbortIncomplete `xml:"AbortIncompleteMultipartUpload,omitempty"`
+	ID                             string               `xml:"ID,omitempty"`
+	Status                         string               `xml:"Status"`
+	Filter                         xmlLifecycleFilter   `xml:"Filter,omitempty"`
+	Expiration                     *xmlExpiration       `xml:"Expiration,omitempty"`
+	AbortIncompleteMultipartUpload *xmlAbortIncomplete  `xml:"AbortIncompleteMultipartUpload,omitempty"`
 	NoncurrentVersionExpiration    *xmlNoncurrentExpiry `xml:"NoncurrentVersionExpiration,omitempty"`
 }
 

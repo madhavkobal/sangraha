@@ -108,11 +108,11 @@ func (h *Handler) listObjectVersions(w http.ResponseWriter, r *http.Request, buc
 		LastModified string   `xml:"LastModified"`
 	}
 	type listVersionsResult struct {
-		XMLName     xml.Name            `xml:"ListVersionsResult"`
-		Name        string              `xml:"Name"`
-		Prefix      string              `xml:"Prefix,omitempty"`
-		MaxKeys     int                 `xml:"MaxKeys"`
-		IsTruncated bool                `xml:"IsTruncated"`
+		XMLName     xml.Name `xml:"ListVersionsResult"`
+		Name        string   `xml:"Name"`
+		Prefix      string   `xml:"Prefix,omitempty"`
+		MaxKeys     int      `xml:"MaxKeys"`
+		IsTruncated bool     `xml:"IsTruncated"`
 		Versions    []interface{}
 	}
 
@@ -144,12 +144,12 @@ func (h *Handler) listObjectVersions(w http.ResponseWriter, r *http.Request, buc
 
 	// Since we can't mix element names dynamically easily, use a raw approach.
 	type xmlResponse struct {
-		XMLName     xml.Name       `xml:"ListVersionsResult"`
-		Name        string         `xml:"Name"`
-		Prefix      string         `xml:"Prefix,omitempty"`
-		MaxKeys     int            `xml:"MaxKeys"`
-		IsTruncated bool           `xml:"IsTruncated"`
-		Versions    []versionEntry `xml:"Version"`
+		XMLName     xml.Name            `xml:"ListVersionsResult"`
+		Name        string              `xml:"Name"`
+		Prefix      string              `xml:"Prefix,omitempty"`
+		MaxKeys     int                 `xml:"MaxKeys"`
+		IsTruncated bool                `xml:"IsTruncated"`
+		Versions    []versionEntry      `xml:"Version"`
 		Markers     []deleteMarkerEntry `xml:"DeleteMarker"`
 	}
 

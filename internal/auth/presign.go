@@ -76,90 +76,101 @@ func GeneratePresignedURL(
 
 // VerifyPresignedURL verifies the SigV4 presigned URL signature on r.
 func VerifyPresignedURL(r *http.Request, secretKey string, now time.Time) error {
-	q := r.URL.Query()
-
-	algorithm := q.Get("X-Amz-Algorithm")
-	if algorithm == "" {
-		algorithm = q.Get("x-amz-algorithm")
-	}
-	if algorithm != authHeaderPrefix {
-		return fmt.Errorf("presign: unsupported algorithm %q", algorithm)
-	}
-
-	credential := q.Get("X-Amz-Credential")
-	if credential == "" {
-		credential = q.Get("x-amz-credential")
-	}
-	amzDate := q.Get("X-Amz-Date")
-	if amzDate == "" {
-		amzDate = q.Get("x-amz-date")
-	}
-	expiresStr := q.Get("X-Amz-Expires")
-	if expiresStr == "" {
-		expiresStr = q.Get("x-amz-expires")
-	}
-	signedHeaders := q.Get("X-Amz-SignedHeaders")
-	if signedHeaders == "" {
-		signedHeaders = q.Get("x-amz-signedheaders")
-	}
-	providedSig := q.Get("X-Amz-Signature")
-	if providedSig == "" {
-		providedSig = q.Get("x-amz-signature")
-	}
-
-	if credential == "" || amzDate == "" || expiresStr == "" || signedHeaders == "" || providedSig == "" {
-		return fmt.Errorf("presign: missing required query parameters")
-	}
-
-	reqTime, err := time.Parse(timestampFormat, amzDate)
+	params, err := parsePresignedParams(r)
 	if err != nil {
-		return fmt.Errorf("presign: invalid X-Amz-Date: %w", err)
+		return err
 	}
-	expSec, err := strconv.ParseInt(expiresStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("presign: invalid X-Amz-Expires: %w", err)
-	}
-	if now.After(reqTime.Add(time.Duration(expSec) * time.Second)) {
-		return fmt.Errorf("presign: URL has expired")
+	if err := validatePresignedExpiry(params, now); err != nil {
+		return err
 	}
 
-	// Parse credential scope.
-	credParts := strings.SplitN(credential, "/", 5)
+	credParts := strings.SplitN(params.credential, "/", 5)
 	if len(credParts) != 5 {
 		return fmt.Errorf("presign: malformed credential")
 	}
-	dateStr := credParts[1]
-	region := credParts[2]
-	service := credParts[3]
+	dateStr, region, service := credParts[1], credParts[2], credParts[3]
 
-	// Rebuild canonical query string (all params except signature).
 	cleanQ := r.URL.Query()
 	cleanQ.Del("X-Amz-Signature")
 	cleanQ.Del("x-amz-signature")
 	canonQ := canonicalQueryString(cleanQ)
 
-	// Canonical headers.
-	hdrNames := strings.Split(signedHeaders, ";")
+	hdrNames := strings.Split(params.signedHeaders, ";")
 	canonHdrs, _ := canonicalHeaders(r, hdrNames)
 
 	canonReq := r.Method + "\n" +
 		canonicalURI(r.URL.Path) + "\n" +
 		canonQ + "\n" +
 		canonHdrs + "\n" +
-		signedHeaders + "\n" +
+		params.signedHeaders + "\n" +
 		"UNSIGNED-PAYLOAD"
 
 	credScope := dateStr + "/" + region + "/" + service + "/aws4_request"
 	stringToSign := authHeaderPrefix + "\n" +
-		amzDate + "\n" +
+		params.amzDate + "\n" +
 		credScope + "\n" +
 		hashSHA256(canonReq)
 
 	signingKey := deriveSigningKey(secretKey, dateStr, region, service)
 	expectedSig := fmt.Sprintf("%x", hmacSHA256(signingKey, []byte(stringToSign)))
 
-	if providedSig != expectedSig {
+	if params.signature != expectedSig {
 		return fmt.Errorf("presign: signature mismatch")
+	}
+	return nil
+}
+
+// presignQueryParams holds the parsed presigned URL query parameters.
+type presignQueryParams struct {
+	algorithm     string
+	credential    string
+	amzDate       string
+	expiresStr    string
+	signedHeaders string
+	signature     string
+}
+
+// parsePresignedParams extracts and validates the required presigned URL query
+// parameters (case-insensitive). Returns an error if any required param is missing.
+func parsePresignedParams(r *http.Request) (presignQueryParams, error) {
+	q := r.URL.Query()
+	get := func(key string) string {
+		if v := q.Get(key); v != "" {
+			return v
+		}
+		return q.Get(strings.ToLower(key))
+	}
+
+	p := presignQueryParams{
+		algorithm:     get("X-Amz-Algorithm"),
+		credential:    get("X-Amz-Credential"),
+		amzDate:       get("X-Amz-Date"),
+		expiresStr:    get("X-Amz-Expires"),
+		signedHeaders: get("X-Amz-SignedHeaders"),
+		signature:     get("X-Amz-Signature"),
+	}
+
+	if p.algorithm != authHeaderPrefix {
+		return presignQueryParams{}, fmt.Errorf("presign: unsupported algorithm %q", p.algorithm)
+	}
+	if p.credential == "" || p.amzDate == "" || p.expiresStr == "" || p.signedHeaders == "" || p.signature == "" {
+		return presignQueryParams{}, fmt.Errorf("presign: missing required query parameters")
+	}
+	return p, nil
+}
+
+// validatePresignedExpiry checks that the presigned URL has not expired.
+func validatePresignedExpiry(p presignQueryParams, now time.Time) error {
+	reqTime, err := time.Parse(timestampFormat, p.amzDate)
+	if err != nil {
+		return fmt.Errorf("presign: invalid X-Amz-Date: %w", err)
+	}
+	expSec, err := strconv.ParseInt(p.expiresStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("presign: invalid X-Amz-Expires: %w", err)
+	}
+	if now.After(reqTime.Add(time.Duration(expSec) * time.Second)) {
+		return fmt.Errorf("presign: URL has expired")
 	}
 	return nil
 }

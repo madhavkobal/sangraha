@@ -153,8 +153,8 @@ func (h *Handler) listMultipartUploads(w http.ResponseWriter, r *http.Request, b
 	}
 
 	type Upload struct {
-		Key      string `xml:"Key"`
-		UploadID string `xml:"UploadId"`
+		Key       string `xml:"Key"`
+		UploadID  string `xml:"UploadId"`
 		Initiated string `xml:"Initiated"`
 	}
 	type ListMultipartUploadsResult struct {
