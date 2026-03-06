@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/health", nil)
 	rr := httptest.NewRecorder()
 
 	handleHealth(rr, req)
@@ -26,7 +27,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleReady(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/ready", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/ready", nil)
 	rr := httptest.NewRecorder()
 
 	handleReady(rr, req)
@@ -45,7 +46,7 @@ func TestHandleReady(t *testing.T) {
 
 func TestHandleInfo(t *testing.T) {
 	handler := handleInfo("v1.0.0", "2026-01-01T00:00:00Z")
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/info", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/info", nil)
 	rr := httptest.NewRecorder()
 
 	handler(rr, req)
@@ -79,7 +80,7 @@ func TestWriteJSON(t *testing.T) {
 
 func TestMetricsEndpoint(t *testing.T) {
 	handler := metricsHandler()
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/metrics", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/metrics", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
