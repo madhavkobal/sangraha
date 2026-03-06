@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -67,7 +68,7 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	})
 	handler := Auth(ks)(next)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -83,7 +84,7 @@ func TestAuthMiddleware_InvalidKey(t *testing.T) {
 	})
 	handler := Auth(ks)(next)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=NOEXIST/20260305/us-east-1/s3/aws4_request,SignedHeaders=host,Signature=abc")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -95,7 +96,7 @@ func TestAuthMiddleware_InvalidKey(t *testing.T) {
 
 func TestAuthMiddleware_ValidKey(t *testing.T) {
 	ks := setupKeyStore(t)
-	ctx := httptest.NewRequest(http.MethodGet, "/", nil).Context()
+	ctx := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil).Context()
 	ak, sk, err := ks.CreateKey(ctx, "testuser", false)
 	if err != nil {
 		t.Fatalf("CreateKey: %v", err)
@@ -112,7 +113,7 @@ func TestAuthMiddleware_ValidKey(t *testing.T) {
 	})
 	handler := Auth(ks)(next)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	now := time.Now().UTC()
 	req.Header.Set("Authorization", buildSigV4Header(req, ak, sk, now))
 	rr := httptest.NewRecorder()
@@ -127,7 +128,7 @@ func TestAuthMiddleware_ValidKey(t *testing.T) {
 }
 
 func TestIdentityFromContextMissing(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	_, ok := IdentityFromContext(req.Context())
 	if ok {
 		t.Error("IdentityFromContext should return false when no identity is set")

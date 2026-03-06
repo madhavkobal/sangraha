@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +15,7 @@ func TestRequestID(t *testing.T) {
 	})
 
 	handler := RequestID(next)
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -39,7 +40,7 @@ func TestRequestIDPreservesClientID(t *testing.T) {
 	})
 	handler := RequestID(next)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("x-amz-request-id", "client-provided-id")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -62,7 +63,7 @@ func TestRequestIDUniqueness(t *testing.T) {
 
 	handler := RequestID(next)
 	for i := 0; i < 10; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 	}

@@ -29,7 +29,7 @@ func TestCreateUser(t *testing.T) {
 	h := setupUserHandler(t)
 
 	body, _ := json.Marshal(map[string]string{"owner": "alice"})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/users", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/users", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 	h.create(rr, req)
 
@@ -52,7 +52,7 @@ func TestCreateUserMissingOwner(t *testing.T) {
 	h := setupUserHandler(t)
 
 	body, _ := json.Marshal(map[string]string{"owner": ""})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/users", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/users", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 	h.create(rr, req)
 
@@ -64,7 +64,7 @@ func TestCreateUserMissingOwner(t *testing.T) {
 func TestCreateUserInvalidJSON(t *testing.T) {
 	h := setupUserHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/users", bytes.NewReader([]byte("not json")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/users", bytes.NewReader([]byte("not json")))
 	rr := httptest.NewRecorder()
 	h.create(rr, req)
 
@@ -80,7 +80,7 @@ func TestListUsers(t *testing.T) {
 	_, _, _ = h.keyStore.CreateKey(ctx, "user1", false)
 	_, _, _ = h.keyStore.CreateKey(ctx, "user2", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/users", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/users", nil)
 	rr := httptest.NewRecorder()
 	h.list(rr, req)
 
@@ -105,7 +105,7 @@ func TestDeleteUser(t *testing.T) {
 	// Build chi request context with URL param.
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add("accessKey", ak)
-	req := httptest.NewRequest(http.MethodDelete, "/admin/v1/users/"+ak, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/admin/v1/users/"+ak, nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 	h.delete(rr, req)
@@ -123,7 +123,7 @@ func TestRotateKey(t *testing.T) {
 
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add("accessKey", ak)
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/users/"+ak+"/keys/rotate", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/users/"+ak+"/keys/rotate", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 	h.rotateKey(rr, req)
@@ -148,7 +148,7 @@ func TestRotateKeyNotFound(t *testing.T) {
 
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add("accessKey", "nonexistent")
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/users/nonexistent/keys/rotate", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/users/nonexistent/keys/rotate", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 	h.rotateKey(rr, req)

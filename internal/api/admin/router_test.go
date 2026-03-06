@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -25,7 +26,7 @@ func TestAdminRouterHealth(t *testing.T) {
 	ks := setupKeyStore(t)
 	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/health", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -38,7 +39,7 @@ func TestAdminRouterReady(t *testing.T) {
 	ks := setupKeyStore(t)
 	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/ready", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/ready", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -51,7 +52,7 @@ func TestAdminRouterInfo(t *testing.T) {
 	ks := setupKeyStore(t)
 	handler := New(ks, "v2.0.0", "2026-03-05T00:00:00Z", "http://localhost:9000", &config.Config{})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/info", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/info", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -64,7 +65,7 @@ func TestAdminRouterMetrics(t *testing.T) {
 	ks := setupKeyStore(t)
 	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/metrics", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/metrics", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -78,7 +79,7 @@ func TestAdminRouterUsersUnauth(t *testing.T) {
 	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	// Unauthenticated request to protected endpoint.
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/users", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/users", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

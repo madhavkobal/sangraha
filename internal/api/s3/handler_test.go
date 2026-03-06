@@ -75,7 +75,7 @@ func authHeader(ak string) string {
 func TestListBuckets(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -93,7 +93,7 @@ func TestCreateAndHeadBucket(t *testing.T) {
 	h, ak := testServer(t)
 
 	// Create
-	req := httptest.NewRequest(http.MethodPut, "/test-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/test-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -103,7 +103,7 @@ func TestCreateAndHeadBucket(t *testing.T) {
 	}
 
 	// Head
-	req2 := httptest.NewRequest(http.MethodHead, "/test-bucket", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/test-bucket", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -116,7 +116,7 @@ func TestCreateAndHeadBucket(t *testing.T) {
 func TestCreateBucketInvalidName(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/AB", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/AB", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -130,12 +130,12 @@ func TestDeleteBucket(t *testing.T) {
 	h, ak := testServer(t)
 
 	// Create bucket
-	req := httptest.NewRequest(http.MethodPut, "/del-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/del-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Delete bucket
-	req2 := httptest.NewRequest(http.MethodDelete, "/del-bucket", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/del-bucket", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -149,13 +149,13 @@ func TestPutAndGetObject(t *testing.T) {
 	h, ak := testServer(t)
 
 	// Create bucket
-	req := httptest.NewRequest(http.MethodPut, "/my-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/my-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Put object
 	body := "hello world"
-	req2 := httptest.NewRequest(http.MethodPut, "/my-bucket/test/key.txt", strings.NewReader(body))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/my-bucket/test/key.txt", strings.NewReader(body))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = int64(len(body))
 	rr2 := httptest.NewRecorder()
@@ -170,7 +170,7 @@ func TestPutAndGetObject(t *testing.T) {
 	}
 
 	// Get object
-	req3 := httptest.NewRequest(http.MethodGet, "/my-bucket/test/key.txt", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/my-bucket/test/key.txt", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)
@@ -186,11 +186,11 @@ func TestPutAndGetObject(t *testing.T) {
 func TestGetObjectNotFound(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodGet, "/bucket/missing", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/missing", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -203,17 +203,17 @@ func TestGetObjectNotFound(t *testing.T) {
 func TestHeadObject(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	body := "data"
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/obj", strings.NewReader(body))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/obj", strings.NewReader(body))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = int64(len(body))
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
-	req3 := httptest.NewRequest(http.MethodHead, "/bucket/obj", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/bucket/obj", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)
@@ -229,16 +229,16 @@ func TestHeadObject(t *testing.T) {
 func TestDeleteObject(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/obj", strings.NewReader("x"))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/obj", strings.NewReader("x"))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = 1
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
-	req3 := httptest.NewRequest(http.MethodDelete, "/bucket/obj", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/bucket/obj", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)
@@ -251,18 +251,18 @@ func TestDeleteObject(t *testing.T) {
 func TestListObjectsV2(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	for _, key := range []string{"a", "b", "c"} {
-		r := httptest.NewRequest(http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
 		r.Header.Set("Authorization", authHeader(ak))
 		r.ContentLength = 1
 		h.ServeHTTP(httptest.NewRecorder(), r)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/bucket?list-type=2", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket?list-type=2", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -282,7 +282,7 @@ func TestListObjectsV2(t *testing.T) {
 func TestUnauthenticated(t *testing.T) {
 	h, _ := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -293,18 +293,18 @@ func TestUnauthenticated(t *testing.T) {
 func TestCopyObject(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	src := "hello copy"
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/src-key", strings.NewReader(src))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/src-key", strings.NewReader(src))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = int64(len(src))
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
 	// Copy to new key.
-	req3 := httptest.NewRequest(http.MethodPut, "/bucket/dst-key", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/dst-key", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	req3.Header.Set("x-amz-copy-source", "/bucket/src-key")
 	rr3 := httptest.NewRecorder()
@@ -315,7 +315,7 @@ func TestCopyObject(t *testing.T) {
 	}
 
 	// Verify the copy is readable.
-	req4 := httptest.NewRequest(http.MethodGet, "/bucket/dst-key", nil)
+	req4 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/dst-key", nil)
 	req4.Header.Set("Authorization", authHeader(ak))
 	rr4 := httptest.NewRecorder()
 	h.ServeHTTP(rr4, req4)
@@ -331,12 +331,12 @@ func TestCopyObject(t *testing.T) {
 func TestDeleteObjects(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	for _, key := range []string{"k1", "k2", "k3"} {
-		r := httptest.NewRequest(http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
 		r.Header.Set("Authorization", authHeader(ak))
 		r.ContentLength = 1
 		h.ServeHTTP(httptest.NewRecorder(), r)
@@ -344,7 +344,7 @@ func TestDeleteObjects(t *testing.T) {
 
 	// Batch delete k1 and k2.
 	delBody := `<Delete><Object><Key>k1</Key></Object><Object><Key>k2</Key></Object></Delete>`
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket?delete", strings.NewReader(delBody))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket?delete", strings.NewReader(delBody))
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -357,18 +357,18 @@ func TestDeleteObjects(t *testing.T) {
 func TestListObjectsV1(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	for _, key := range []string{"x", "y"} {
-		r := httptest.NewRequest(http.MethodPut, "/bucket/"+key, strings.NewReader("v"))
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/"+key, strings.NewReader("v"))
 		r.Header.Set("Authorization", authHeader(ak))
 		r.ContentLength = 1
 		h.ServeHTTP(httptest.NewRecorder(), r)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/bucket", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -388,7 +388,7 @@ func TestListObjectsV1(t *testing.T) {
 func TestHeadBucketNotFound(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodHead, "/nonexistent-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/nonexistent-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -401,16 +401,16 @@ func TestHeadBucketNotFound(t *testing.T) {
 func TestDeleteBucketNotEmpty(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/nonempty", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/nonempty", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPut, "/nonempty/obj", strings.NewReader("x"))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/nonempty/obj", strings.NewReader("x"))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = 1
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
-	req3 := httptest.NewRequest(http.MethodDelete, "/nonempty", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/nonempty", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)
@@ -424,12 +424,12 @@ func TestMultipartUpload(t *testing.T) {
 	h, ak := testServer(t)
 
 	// Create bucket.
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Initiate multipart upload.
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket/big-file?uploads", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/big-file?uploads", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -452,7 +452,7 @@ func TestMultipartUpload(t *testing.T) {
 
 	// Upload a part.
 	partData := strings.Repeat("Z", 1024)
-	req3 := httptest.NewRequest(http.MethodPut, "/bucket/big-file?partNumber=1&uploadId="+uploadID, strings.NewReader(partData))
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/big-file?partNumber=1&uploadId="+uploadID, strings.NewReader(partData))
 	req3.Header.Set("Authorization", authHeader(ak))
 	req3.ContentLength = int64(len(partData))
 	rr3 := httptest.NewRecorder()
@@ -465,7 +465,7 @@ func TestMultipartUpload(t *testing.T) {
 
 	// Complete the upload.
 	completeBody := `<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>` + etag + `</ETag></Part></CompleteMultipartUpload>`
-	req4 := httptest.NewRequest(http.MethodPost, "/bucket/big-file?uploadId="+uploadID, strings.NewReader(completeBody))
+	req4 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/big-file?uploadId="+uploadID, strings.NewReader(completeBody))
 	req4.Header.Set("Authorization", authHeader(ak))
 	rr4 := httptest.NewRecorder()
 	h.ServeHTTP(rr4, req4)
@@ -475,7 +475,7 @@ func TestMultipartUpload(t *testing.T) {
 	}
 
 	// Verify the assembled object is readable.
-	req5 := httptest.NewRequest(http.MethodGet, "/bucket/big-file", nil)
+	req5 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/big-file", nil)
 	req5.Header.Set("Authorization", authHeader(ak))
 	rr5 := httptest.NewRecorder()
 	h.ServeHTTP(rr5, req5)
@@ -491,12 +491,12 @@ func TestMultipartUpload(t *testing.T) {
 func TestAbortMultipartUpload(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Initiate.
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket/file?uploads", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/file?uploads", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -508,7 +508,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 	uploadID := initResult.UploadID
 
 	// Abort.
-	req3 := httptest.NewRequest(http.MethodDelete, "/bucket/file?uploadId="+uploadID, nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/bucket/file?uploadId="+uploadID, nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)
@@ -521,12 +521,12 @@ func TestAbortMultipartUpload(t *testing.T) {
 func TestCreateBucketAlreadyExists(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/dup-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/dup-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Create same bucket again.
-	req2 := httptest.NewRequest(http.MethodPut, "/dup-bucket", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/dup-bucket", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -539,11 +539,11 @@ func TestCreateBucketAlreadyExists(t *testing.T) {
 func TestHeadObjectNotFound(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodHead, "/bucket/missing-key", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/bucket/missing-key", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -556,7 +556,7 @@ func TestHeadObjectNotFound(t *testing.T) {
 func TestDeleteObjectMissingBucket(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodDelete, "/no-such-bucket/key", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/no-such-bucket/key", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -572,11 +572,11 @@ func TestDeleteObjectMissingBucket(t *testing.T) {
 func TestCopyObjectMissingSource(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/dst", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/dst", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.Header.Set("x-amz-copy-source", "/bucket/nonexistent-src")
 	rr2 := httptest.NewRecorder()
@@ -590,12 +590,12 @@ func TestCopyObjectMissingSource(t *testing.T) {
 func TestCopyObjectInvalidSource(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// x-amz-copy-source without a slash (no bucket/key separator).
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/dst", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/dst", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.Header.Set("x-amz-copy-source", "nodestination")
 	rr2 := httptest.NewRecorder()
@@ -609,11 +609,11 @@ func TestCopyObjectInvalidSource(t *testing.T) {
 func TestListObjectsV2InvalidMaxKeys(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodGet, "/bucket?list-type=2&max-keys=bad", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket?list-type=2&max-keys=bad", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -626,7 +626,7 @@ func TestListObjectsV2InvalidMaxKeys(t *testing.T) {
 func TestListObjectsV2MissingBucket(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/no-such-bucket?list-type=2", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/no-such-bucket?list-type=2", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -639,7 +639,7 @@ func TestListObjectsV2MissingBucket(t *testing.T) {
 func TestListObjectsV1MissingBucket(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/no-such-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/no-such-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -652,18 +652,18 @@ func TestListObjectsV1MissingBucket(t *testing.T) {
 func TestListObjectsV2WithPrefix(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	for _, key := range []string{"a/1", "a/2", "b/1"} {
-		r := httptest.NewRequest(http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/"+key, strings.NewReader("x"))
 		r.Header.Set("Authorization", authHeader(ak))
 		r.ContentLength = 1
 		h.ServeHTTP(httptest.NewRecorder(), r)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/bucket?list-type=2&prefix=a/&delimiter=/", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket?list-type=2&prefix=a/&delimiter=/", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -683,11 +683,11 @@ func TestListObjectsV2WithPrefix(t *testing.T) {
 func TestAbortMultipartUploadNotFound(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodDelete, "/bucket/file?uploadId=nonexistent-id", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/bucket/file?uploadId=nonexistent-id", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -701,7 +701,7 @@ func TestAbortMultipartUploadNotFound(t *testing.T) {
 func TestDeleteBucketNotFound(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodDelete, "/no-such-bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/no-such-bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -714,11 +714,11 @@ func TestDeleteBucketNotFound(t *testing.T) {
 func TestUploadPartInvalidNumber(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/file?partNumber=bad&uploadId=fake", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/file?partNumber=bad&uploadId=fake", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -731,17 +731,17 @@ func TestUploadPartInvalidNumber(t *testing.T) {
 func TestGetObjectWithRange(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	body := "hello world!"
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/obj", strings.NewReader(body))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/obj", strings.NewReader(body))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.ContentLength = int64(len(body))
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
-	req3 := httptest.NewRequest(http.MethodGet, "/bucket/obj", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/obj", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	req3.Header.Set("Range", "bytes=0-4")
 	rr3 := httptest.NewRecorder()
@@ -756,12 +756,12 @@ func TestGetObjectWithRange(t *testing.T) {
 func TestPostBucketInvalidOperation(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// POST to bucket without ?delete should return 400.
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -774,7 +774,7 @@ func TestPostBucketInvalidOperation(t *testing.T) {
 func TestCreateMultipartUploadMissingBucket(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/no-such-bucket/file?uploads", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/no-such-bucket/file?uploads", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -787,13 +787,13 @@ func TestCreateMultipartUploadMissingBucket(t *testing.T) {
 func TestUploadPartMissingUploadID(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// Include ?uploadId= (empty) so the router dispatches to uploadPart handler,
 	// which validates that uploadId must not be empty.
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/file?partNumber=1&uploadId=", strings.NewReader("data"))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/file?partNumber=1&uploadId=", strings.NewReader("data"))
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -806,12 +806,12 @@ func TestUploadPartMissingUploadID(t *testing.T) {
 func TestCompleteMultipartUploadEmptyID(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	// POST with empty uploadId= should return 400.
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket/file?uploadId=", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/file?uploadId=", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -824,11 +824,11 @@ func TestCompleteMultipartUploadEmptyID(t *testing.T) {
 func TestCompleteMultipartUploadBadXML(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket/big-file?uploads", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/big-file?uploads", nil)
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -840,7 +840,7 @@ func TestCompleteMultipartUploadBadXML(t *testing.T) {
 		t.Fatal("expected UploadID in init response")
 	}
 
-	req3 := httptest.NewRequest(http.MethodPost, "/bucket/big-file?uploadId="+initResult.UploadID,
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket/big-file?uploadId="+initResult.UploadID,
 		strings.NewReader("<<<not-valid-xml>>>"))
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
@@ -854,11 +854,11 @@ func TestCompleteMultipartUploadBadXML(t *testing.T) {
 func TestDeleteObjectsInvalidXML(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPost, "/bucket?delete", strings.NewReader("not-xml"))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/bucket?delete", strings.NewReader("not-xml"))
 	req2.Header.Set("Authorization", authHeader(ak))
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
@@ -871,17 +871,17 @@ func TestDeleteObjectsInvalidXML(t *testing.T) {
 func TestObjectUserMeta(t *testing.T) {
 	h, ak := testServer(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/bucket", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket", nil)
 	req.Header.Set("Authorization", authHeader(ak))
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
-	req2 := httptest.NewRequest(http.MethodPut, "/bucket/obj", strings.NewReader("data"))
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/bucket/obj", strings.NewReader("data"))
 	req2.Header.Set("Authorization", authHeader(ak))
 	req2.Header.Set("x-amz-meta-author", "alice")
 	req2.ContentLength = 4
 	h.ServeHTTP(httptest.NewRecorder(), req2)
 
-	req3 := httptest.NewRequest(http.MethodGet, "/bucket/obj", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/obj", nil)
 	req3.Header.Set("Authorization", authHeader(ak))
 	rr3 := httptest.NewRecorder()
 	h.ServeHTTP(rr3, req3)

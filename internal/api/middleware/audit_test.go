@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,7 @@ func TestAuditMiddleware(t *testing.T) {
 	})
 	handler := Audit(logger)(next)
 
-	req := httptest.NewRequest(http.MethodPut, "/my-bucket/my-key", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/my-bucket/my-key", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -36,7 +37,7 @@ func TestAuditMiddlewareCaptures4xx(t *testing.T) {
 	})
 	handler := Audit(logger)(next)
 
-	req := httptest.NewRequest(http.MethodGet, "/bucket/key", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bucket/key", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -52,7 +53,7 @@ func TestAuditMiddlewareNilLogger(t *testing.T) {
 	})
 	handler := Audit(nil)(next)
 
-	req := httptest.NewRequest(http.MethodDelete, "/b/k", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/b/k", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
