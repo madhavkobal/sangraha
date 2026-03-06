@@ -15,6 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Build web dashboard
+        run: cd web && npm ci && npm run build
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:

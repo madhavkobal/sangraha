@@ -64,13 +64,15 @@ func collectInitAnswers(reader *bufio.Reader) (initConfig, error) {
 
 	cfg.configDir = promptDefault(reader, "Config directory", filepath.Join(homeDir, ".sangraha"))
 	cfg.configDir = filepath.Clean(cfg.configDir) //nolint:gosec // G304: path is operator-provided
-	if err := os.MkdirAll(cfg.configDir, 0700); err != nil {
+	err = os.MkdirAll(cfg.configDir, 0700)
+	if err != nil {
 		return initConfig{}, fmt.Errorf("create config dir: %w", err)
 	}
 
 	cfg.dataDir = promptDefault(reader, "Data directory", filepath.Join(cfg.configDir, "data"))
 	cfg.dataDir = filepath.Clean(cfg.dataDir) //nolint:gosec // G304: path is operator-provided
-	if err := os.MkdirAll(cfg.dataDir, 0750); err != nil {
+	err = os.MkdirAll(cfg.dataDir, 0750)
+	if err != nil {
 		return initConfig{}, fmt.Errorf("create data dir: %w", err)
 	}
 

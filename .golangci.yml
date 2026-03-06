@@ -51,6 +51,16 @@ linters:
         linters:
           - revive
 
+      # Third-party vendored code in web/node_modules is not subject to our lint rules.
+      - path: "web/node_modules/"
+        linters:
+          - gocyclo
+          - errcheck
+          - staticcheck
+          - govet
+          - revive
+          - gosec
+
 formatters:
   enable:
     - gofmt          # formatting compliance

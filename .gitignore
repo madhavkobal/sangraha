@@ -4,10 +4,10 @@ sangraha
 coverage.out
 *.test
 
-# Web dashboard build output (keep directory, ignore built files)
-web/dist/*
-!web/dist/.gitkeep
+# Web dashboard node_modules (never committed)
 web/node_modules/
+# TypeScript build info (regenerated on build)
+web/tsconfig.*.tsbuildinfo
 
 # Development TLS certificates
 certs/

@@ -51,8 +51,8 @@ func testServer(t *testing.T) (http.Handler, string) {
 		CreatedAt:  time.Now().UTC(),
 		IsRoot:     true,
 	}
-	if err := meta.PutAccessKey(context.Background(), rec); err != nil {
-		t.Fatalf("PutAccessKey: %v", err)
+	if putErr := meta.PutAccessKey(context.Background(), rec); putErr != nil {
+		t.Fatalf("PutAccessKey: %v", putErr)
 	}
 
 	// Audit logger that discards output (empty path = discard).

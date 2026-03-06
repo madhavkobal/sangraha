@@ -169,7 +169,7 @@ func splitTagKV(s string) []string {
 // xmlMetadataTags converts a metadata tag map (for internal use).
 func xmlMetadataTags(tags map[string]string) []xmlTag {
 	_ = metadata.ObjectRecord{}
-	var out []xmlTag
+	out := make([]xmlTag, 0, len(tags))
 	for k, v := range tags {
 		out = append(out, xmlTag{Key: k, Value: v})
 	}

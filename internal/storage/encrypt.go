@@ -116,6 +116,7 @@ func (ew *encryptingWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// Close flushes and seals the encrypted buffer to the destination writer.
 func (ew *encryptingWriter) Close() error {
 	ct := ew.gcm.Seal(nil, ew.nonce, ew.buf, nil)
 	_, err := ew.dst.Write(ct)
