@@ -10,7 +10,7 @@ import (
 
 // PresignedParams holds the parsed parameters of a presigned URL.
 type PresignedParams struct {
-	AccessKey  string
+	AccessKey  string //nolint:gosec // G117: AccessKey is a public access key ID, not a secret value
 	Date       string
 	Expires    int64
 	Region     string

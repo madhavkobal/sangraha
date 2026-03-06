@@ -26,7 +26,7 @@ func writeError(w http.ResponseWriter, r *http.Request, statusCode int, code, me
 	w.Header().Set("x-amz-request-id", reqID)
 	w.WriteHeader(statusCode)
 	_, _ = w.Write([]byte(xml.Header))
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) //nolint:gosec // G705: body is xml.Marshal output (XML-escaped); Content-Type is application/xml
 }
 
 // writeXML serialises v to XML and writes it with status code.
@@ -41,5 +41,5 @@ func writeXML(w http.ResponseWriter, r *http.Request, statusCode int, v any) {
 	w.Header().Set("x-amz-request-id", reqID)
 	w.WriteHeader(statusCode)
 	_, _ = w.Write([]byte(xml.Header))
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) //nolint:gosec // G705: body is xml.Marshal output (XML-escaped); Content-Type is application/xml
 }

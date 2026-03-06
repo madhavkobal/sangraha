@@ -113,5 +113,5 @@ func SetIdentityInContext(ctx context.Context, id auth.VerifiedIdentity) context
 func writeAuthError(w http.ResponseWriter, code, msg string) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusForbidden)
-	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>` + code + `</Code><Message>` + msg + `</Message></Error>`))
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>` + code + `</Code><Message>` + msg + `</Message></Error>`)) //nolint:gosec // G705: code and msg are internal constants; Content-Type is application/xml
 }

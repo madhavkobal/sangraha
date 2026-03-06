@@ -22,7 +22,7 @@ func (h *Handler) getBucketPolicy(w http.ResponseWriter, r *http.Request, bucket
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(policy))
+	_, _ = w.Write([]byte(policy)) //nolint:gosec // G705: policy is operator-stored JSON; Content-Type is application/json, no HTML rendering
 }
 
 // putBucketPolicy handles PUT /{bucket}?policy.

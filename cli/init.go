@@ -118,6 +118,7 @@ func writeInitFiles(cfg initConfig) error {
 		"export SANGRAHA_ROOT_SECRET_KEY=%s\nexport SANGRAHA_SSE_MASTER_KEY=%s\n",
 		cfg.rootSecretKey, cfg.sseKey,
 	)
+	//nolint:gosec // G703: envPath is operator-provided and sanitised with filepath.Join + Clean
 	if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 		return fmt.Errorf("write env file: %w", err)
 	}
