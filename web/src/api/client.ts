@@ -114,6 +114,91 @@ export interface GCStatus {
   last_run?: string
 }
 
+// --- Bucket types ---
+
+export interface Bucket {
+  name: string
+  owner: string
+  region: string
+  versioning: string
+  acl: string
+  object_count: number
+  total_bytes: number
+  created_at: string
+  sse_algorithm?: string
+}
+
+export interface CreateBucketRequest {
+  name: string
+  region?: string
+  acl?: string
+}
+
+// --- Object types ---
+
+export interface ObjectRecord {
+  key: string
+  size: number
+  etag: string
+  content_type: string
+  last_modified: string
+  owner: string
+  storage_class: string
+  tags?: Record<string, string>
+  version_id?: string
+}
+
+export interface ListObjectsResponse {
+  objects: ObjectRecord[]
+  prefixes: string[]
+}
+
+// --- Alert types ---
+
+export interface AlertRule {
+  id: string
+  metric: string
+  operator: string
+  threshold: number
+  label: string
+  created_at: string
+}
+
+export interface CreateAlertRuleRequest {
+  metric: string
+  operator: string
+  threshold: number
+  label: string
+}
+
+export interface AlertEvent {
+  id: string
+  rule_id: string
+  rule_label: string
+  metric: string
+  fired_at: string
+  value: number
+  threshold: number
+  resolved: boolean
+  resolved_at?: string
+}
+
+// --- Audit types ---
+
+export interface AuditEntry {
+  time: string
+  request_id: string
+  user: string
+  action: string
+  bucket?: string
+  key?: string
+  source_ip?: string
+  status: number
+  bytes?: number
+  duration_ms: number
+  error?: string
+}
+
 // ---- API calls ----
 
 export const api = {
@@ -156,5 +241,41 @@ export const api = {
   gc: {
     trigger: () => request<{ status: string }>('/admin/v1/gc', { method: 'POST' }),
     status: () => request<GCStatus>('/admin/v1/gc/status'),
+  },
+
+  buckets: {
+    list: () => request<Bucket[]>('/admin/v1/buckets'),
+    create: (body: CreateBucketRequest) =>
+      request<Bucket>('/admin/v1/buckets', { method: 'POST', body: JSON.stringify(body) }),
+    delete: (name: string) => request<void>(`/admin/v1/buckets/${name}`, { method: 'DELETE' }),
+    listObjects: (name: string, prefix?: string, continuationToken?: string) => {
+      const params = new URLSearchParams()
+      if (prefix) params.set('prefix', prefix)
+      if (continuationToken) params.set('continuation_token', continuationToken)
+      return request<ListObjectsResponse>(`/admin/v1/buckets/${name}/objects?${params}`)
+    },
+    deleteObject: (bucket: string, key: string) =>
+      request<void>(`/admin/v1/buckets/${bucket}/objects/${key}`, { method: 'DELETE' }),
+  },
+
+  alerts: {
+    listRules: () => request<AlertRule[]>('/admin/v1/alerts'),
+    createRule: (body: CreateAlertRuleRequest) =>
+      request<AlertRule>('/admin/v1/alerts', { method: 'POST', body: JSON.stringify(body) }),
+    deleteRule: (id: string) => request<void>(`/admin/v1/alerts/${id}`, { method: 'DELETE' }),
+    history: () => request<AlertEvent[]>('/admin/v1/alerts/history'),
+  },
+
+  audit: {
+    query: (params: { from?: string; to?: string; user?: string; bucket?: string; action?: string; limit?: number }) => {
+      const p = new URLSearchParams()
+      if (params.from) p.set('from', params.from)
+      if (params.to) p.set('to', params.to)
+      if (params.user) p.set('user', params.user)
+      if (params.bucket) p.set('bucket', params.bucket)
+      if (params.action) p.set('action', params.action)
+      if (params.limit) p.set('limit', String(params.limit))
+      return request<AuditEntry[]>(`/admin/v1/audit?${p}`)
+    },
   },
 }

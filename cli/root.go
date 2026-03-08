@@ -36,6 +36,8 @@ Run 'sangraha --help' for a list of available commands.`,
 // Execute runs the root command and exits with a non-zero status on failure.
 func Execute(version, buildTime string) {
 	rootCmd.Version = fmt.Sprintf("%s (built %s)", version, buildTime)
+	binaryVersion = version
+	binaryBuildTime = buildTime
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

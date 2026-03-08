@@ -28,6 +28,10 @@ import (
 var (
 	flagConfigFile string
 	flagDev        bool
+
+	// binaryVersion and binaryBuildTime are set from Execute() via main.go ldflags.
+	binaryVersion   = "dev"
+	binaryBuildTime = "unknown"
 )
 
 // serverCmd is the parent command for server operations.
@@ -159,7 +163,7 @@ func serveUntilSignal(cfg *config.Config, deps *serverDeps) error {
 	serverURL := scheme + "://" + addr
 
 	s3Handler := s3api.New(deps.engine, deps.keyStore, deps.auditor, rateLimitRPS)
-	adminHandler := adminapi.New(deps.keyStore, "dev", "unknown", serverURL, cfg)
+	adminHandler := adminapi.New(deps.keyStore, deps.engine, deps.auditor, binaryVersion, binaryBuildTime, serverURL, cfg)
 
 	s3Srv := newHTTPServer(cfg.Server.S3Address, s3Handler)
 	adminSrv := newHTTPServer(cfg.Server.AdminAddress, adminHandler)

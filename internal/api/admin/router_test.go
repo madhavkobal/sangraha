@@ -24,7 +24,7 @@ func setupKeyStore(t *testing.T) *auth.KeyStore {
 
 func TestAdminRouterHealth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/health", nil)
 	rr := httptest.NewRecorder()
@@ -37,7 +37,7 @@ func TestAdminRouterHealth(t *testing.T) {
 
 func TestAdminRouterReady(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/ready", nil)
 	rr := httptest.NewRecorder()
@@ -50,7 +50,7 @@ func TestAdminRouterReady(t *testing.T) {
 
 func TestAdminRouterInfo(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, "v2.0.0", "2026-03-05T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v2.0.0", "2026-03-05T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/info", nil)
 	rr := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestAdminRouterInfo(t *testing.T) {
 
 func TestAdminRouterMetrics(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/metrics", nil)
 	rr := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestAdminRouterMetrics(t *testing.T) {
 
 func TestAdminRouterUsersUnauth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
 	// Unauthenticated request to protected endpoint.
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/users", nil)

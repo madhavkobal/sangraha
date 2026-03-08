@@ -5,10 +5,25 @@ import Overview from './Overview'
 import Users from './Users'
 import Configuration from './Configuration'
 import Monitoring from './Monitoring'
-import { LayoutDashboard, Users as UsersIcon, Settings, Activity, LogOut, Server } from 'lucide-react'
+import Buckets from './Buckets'
+import Objects from './Objects'
+import AuditLog from './AuditLog'
+import Alerts from './Alerts'
 import ServerPage from './ServerPage'
+import {
+  LayoutDashboard,
+  Users as UsersIcon,
+  Settings,
+  Activity,
+  LogOut,
+  Server,
+  Archive,
+  FolderOpen,
+  ScrollText,
+  Bell,
+} from 'lucide-react'
 
-type Page = 'overview' | 'users' | 'monitoring' | 'configuration' | 'server'
+type Page = 'overview' | 'buckets' | 'objects' | 'users' | 'monitoring' | 'alerts' | 'audit' | 'configuration' | 'server'
 
 interface Props {
   onLogout: () => void
@@ -16,20 +31,31 @@ interface Props {
 
 const navItems: { id: Page; label: string; Icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
+  { id: 'buckets', label: 'Buckets', Icon: Archive },
+  { id: 'objects', label: 'Objects', Icon: FolderOpen },
   { id: 'users', label: 'Users', Icon: UsersIcon },
   { id: 'monitoring', label: 'Monitoring', Icon: Activity },
+  { id: 'alerts', label: 'Alerts', Icon: Bell },
+  { id: 'audit', label: 'Audit Log', Icon: ScrollText },
   { id: 'configuration', label: 'Configuration', Icon: Settings },
   { id: 'server', label: 'Server', Icon: Server },
 ]
 
 export default function Shell({ onLogout }: Props) {
   const [page, setPage] = useState<Page>('overview')
+  // When clicking "Browse" on a bucket row, jump to the Objects page for that bucket.
+  const [activeBucket, setActiveBucket] = useState<string>('')
 
   const { data: info } = useQuery({
     queryKey: ['info'],
     queryFn: api.info,
     refetchInterval: 60_000,
   })
+
+  const handleBrowseBucket = (name: string) => {
+    setActiveBucket(name)
+    setPage('objects')
+  }
 
   return (
     <div className="flex min-h-screen bg-bg text-white">
@@ -71,8 +97,12 @@ export default function Shell({ onLogout }: Props) {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         {page === 'overview' && <Overview />}
+        {page === 'buckets' && <Buckets onBrowse={handleBrowseBucket} />}
+        {page === 'objects' && <Objects bucket={activeBucket} />}
         {page === 'users' && <Users />}
         {page === 'monitoring' && <Monitoring />}
+        {page === 'alerts' && <Alerts />}
+        {page === 'audit' && <AuditLog />}
         {page === 'configuration' && <Configuration />}
         {page === 'server' && <ServerPage />}
       </main>

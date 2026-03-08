@@ -8,18 +8,29 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/madhavkobal/sangraha/internal/api/middleware"
+	"github.com/madhavkobal/sangraha/internal/audit"
 	"github.com/madhavkobal/sangraha/internal/auth"
 	"github.com/madhavkobal/sangraha/internal/config"
+	"github.com/madhavkobal/sangraha/internal/storage"
 	"github.com/madhavkobal/sangraha/internal/web"
 )
 
 // New creates the admin API HTTP handler and registers all routes.
 // cfg is the current running configuration (mutations via PUT /admin/v1/config
 // apply in-place and are protected by a mutex inside configHandler).
-func New(keyStore *auth.KeyStore, version, buildTime, serverURL string, cfg *config.Config) http.Handler {
+func New(
+	keyStore *auth.KeyStore,
+	engine *storage.Engine,
+	auditor *audit.Logger,
+	version, buildTime, serverURL string,
+	cfg *config.Config,
+) http.Handler {
 	uh := &userHandler{keyStore: keyStore}
 	ph := &presignHandler{keyStore: keyStore, serverURL: serverURL}
 	ch := &configHandler{cfg: cfg, mu: sync.RWMutex{}}
+	bh := &bucketAdminHandler{engine: engine}
+	ah := &alertHandler{}
+	auh := &auditHandler{auditLogPath: cfg.Logging.AuditLog}
 
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
@@ -65,6 +76,22 @@ func New(keyStore *auth.KeyStore, version, buildTime, serverURL string, cfg *con
 		// Garbage collection.
 		r.Post("/admin/v1/gc", handleGCTrigger)
 		r.Get("/admin/v1/gc/status", handleGCStatus)
+
+		// Bucket + object management (admin view).
+		r.Get("/admin/v1/buckets", bh.listBuckets)
+		r.Post("/admin/v1/buckets", bh.createBucket)
+		r.Delete("/admin/v1/buckets/{name}", bh.deleteBucket)
+		r.Get("/admin/v1/buckets/{name}/objects", bh.listObjects)
+		r.Delete("/admin/v1/buckets/{name}/objects/*", bh.deleteObject)
+
+		// Alert rules + history.
+		r.Get("/admin/v1/alerts", ah.listRules)
+		r.Post("/admin/v1/alerts", ah.createRule)
+		r.Delete("/admin/v1/alerts/{id}", ah.deleteRule)
+		r.Get("/admin/v1/alerts/history", ah.listHistory)
+
+		// Audit log query.
+		r.Get("/admin/v1/audit", auh.handleAuditQuery)
 	})
 
 	// Serve embedded web dashboard at root; must be last so API routes take priority.
