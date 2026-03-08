@@ -92,6 +92,15 @@ func New(
 
 		// Audit log query.
 		r.Get("/admin/v1/audit", auh.handleAuditQuery)
+
+		// Export / import.
+		r.Post("/admin/v1/export", handleExport)
+		r.Post("/admin/v1/import", handleImport)
+		r.Get("/admin/v1/export/status", handleExportStatus)
+
+		// Backup schedule.
+		r.Get("/admin/v1/backup/schedule", handleGetBackupSchedule)
+		r.Put("/admin/v1/backup/schedule", handlePutBackupSchedule)
 	})
 
 	// Serve embedded web dashboard at root; must be last so API routes take priority.

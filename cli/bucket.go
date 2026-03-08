@@ -54,7 +54,22 @@ var bucketListCmd = &cobra.Command{
 	},
 }
 
+var bucketVersioningCmd = &cobra.Command{
+	Use:   "versioning <name> <enable|suspend|disable>",
+	Short: "Set the versioning state of a bucket",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, state := args[0], args[1]
+		switch state {
+		case "enable", "suspend", "disable":
+		default:
+			return fmt.Errorf("versioning state must be one of: enable, suspend, disable")
+		}
+		return fmt.Errorf("bucket versioning %s %s: server communication not yet implemented (Phase 2 CLI stub)", name, state)
+	},
+}
+
 func init() {
 	bucketDeleteCmd.Flags().Bool("force", false, "skip confirmation prompt")
-	bucketCmd.AddCommand(bucketCreateCmd, bucketDeleteCmd, bucketListCmd)
+	bucketCmd.AddCommand(bucketCreateCmd, bucketDeleteCmd, bucketListCmd, bucketVersioningCmd)
 }

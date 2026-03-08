@@ -1,13 +1,17 @@
 // Package audit emits structured, append-only audit events for every API
 // request. Each event is written as a single JSON line to the configured
-// audit log file (or to the zerolog logger when no file is set).
+// audit log file or forwarded to a syslog server. A path prefix of
+// "syslog://" routes events to UDP syslog; any other non-empty path opens
+// a local append-only file.
 package audit
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -30,16 +34,32 @@ type Event struct {
 	Error      string    `json:"error,omitempty"`
 }
 
-// Logger writes audit events to an append-only file.
+// Logger writes audit events to an append-only file or a syslog server.
 type Logger struct {
-	mu   sync.Mutex
-	file *os.File
+	mu     sync.Mutex
+	file   *os.File
+	syslog net.Conn // non-nil when forwarding to UDP syslog
 }
 
-// New opens (or creates) the audit log file at path in append-only mode.
+// New opens (or creates) the audit log destination described by path.
+//
+//   - "" → discard (no-op logger)
+//   - "syslog://host:port" → UDP syslog forwarding
+//   - any other value → local append-only file
 func New(path string) (*Logger, error) {
 	if path == "" {
 		return &Logger{}, nil // discard
+	}
+	if strings.HasPrefix(path, "syslog://") {
+		addr := strings.TrimPrefix(path, "syslog://")
+		d := &net.Dialer{}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn, err := d.DialContext(ctx, "udp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("audit: connect to syslog %s: %w", addr, err)
+		}
+		return &Logger{syslog: conn}, nil
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // path is operator-configured
 	if err != nil {
@@ -60,19 +80,32 @@ func (l *Logger) Log(e Event) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	line := append(data, '\n')
+	if l.syslog != nil {
+		// RFC 5424-ish: prepend a minimal syslog priority header.
+		msg := fmt.Sprintf("<14>sangraha audit: %s", line)
+		_, _ = l.syslog.Write([]byte(msg))
+		return
+	}
 	if l.file != nil {
-		_, _ = l.file.Write(append(data, '\n'))
+		_, _ = l.file.Write(line)
 	}
 }
 
-// Close flushes and closes the underlying log file.
+// Close flushes and closes the underlying log file or syslog connection.
 func (l *Logger) Close() error {
-	if l == nil || l.file == nil {
+	if l == nil {
 		return nil
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.file.Close()
+	if l.syslog != nil {
+		return l.syslog.Close()
+	}
+	if l.file != nil {
+		return l.file.Close()
+	}
+	return nil
 }
 
 // WithLogger attaches an audit logger to the context.
