@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/madhavkobal/sangraha/internal/auth"
 	"github.com/madhavkobal/sangraha/internal/config"
@@ -166,26 +165,16 @@ func TestAdminRouterLogStream(t *testing.T) {
 	ks := setupKeyStore(t)
 	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
 
-	// Use a real test server so we can cancel the long-lived SSE connection.
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	// Use a pre-cancelled context so the SSE handler exits immediately after
+	// writing the initial 200 + "connected" comment, avoiding any blocking.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/admin/v1/logs/stream", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/admin/v1/logs/stream", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	resp, doErr := http.DefaultClient.Do(req)
-	if doErr != nil && ctx.Err() == nil {
-		// Context-cancellation errors are expected — only fail on unexpected errors.
-		t.Fatalf("do request: %v", doErr)
-	}
-	if resp != nil {
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("logs/stream: want 200 got %d", resp.StatusCode)
-		}
+	if rr.Code != http.StatusOK {
+		t.Errorf("logs/stream: want 200 got %d", rr.Code)
 	}
 }
