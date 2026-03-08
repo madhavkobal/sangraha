@@ -50,6 +50,7 @@ auth:
 logging:
   level: error
   format: text
+  audit_log: ""
 EOF
 
 echo "Starting sangraha server..."
