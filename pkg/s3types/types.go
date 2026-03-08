@@ -93,7 +93,7 @@ type ObjectToDelete struct {
 
 // DeleteResult is the response body for a DeleteObjects operation.
 type DeleteResult struct {
-	XMLName []Deleted     `xml:"DeleteResult"`
+	XMLName xml.Name      `xml:"DeleteResult"`
 	Deleted []Deleted     `xml:"Deleted"`
 	Errors  []DeleteError `xml:"Error"`
 }

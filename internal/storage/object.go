@@ -331,10 +331,15 @@ func (e *Engine) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, d
 		return metadata.ObjectRecord{}, &BucketNotFoundError{Name: dstBucket}
 	}
 
+	srcBackendKey := srcKey
+	if src.VersionID != "" {
+		srcBackendKey = versionedBackendKey(srcKey, src.VersionID)
+	}
+
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)
 	go func() {
-		rerr := e.backend.Read(ctx, srcBucket, srcKey, pw)
+		rerr := e.backend.Read(ctx, srcBucket, srcBackendKey, pw)
 		pw.CloseWithError(rerr)
 		errCh <- rerr
 	}()

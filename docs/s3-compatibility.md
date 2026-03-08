@@ -1,8 +1,8 @@
 # sangraha S3 Compatibility Report
 
-> Version: 1.0
+> Version: v0.1.0
 > Last updated: 2026-03-08
-> Test environment: sangraha v1.0.0, localfs backend, TLS disabled
+> Test environment: sangraha v0.1.0, localfs backend, TLS disabled
 
 This document lists all tested S3 API operations, their compatibility status, known gaps, and workarounds.
 
@@ -146,7 +146,7 @@ This document lists all tested S3 API operations, their compatibility status, kn
 
 ## Known Gaps and Limitations
 
-The following S3 features are **not implemented** in v1.0.0:
+The following S3 features are **not implemented** in v0.1.0:
 
 | Feature | S3 API | Status | Roadmap |
 |---|---|---|---|

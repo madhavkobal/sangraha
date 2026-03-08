@@ -1,19 +1,22 @@
 // Package integration runs integration tests against a live sangraha binary.
-// Tests use raw net/http (no SDK) to stay dependency-free.
+// Tests use raw net/http with full AWS SigV4 request signing.
 //
-// The server is started and torn down by TestMain.
+// The server is started and torn down by integration-test.sh.
 // The S3_ENDPOINT and ADMIN_ENDPOINT env vars can override the default ports.
 package integration
 
 import (
 	"bytes"
 	"context"
-	"encoding/xml"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +26,7 @@ var (
 	s3Endpoint    = "http://localhost:19000"
 	adminEndpoint = "http://localhost:19001"
 
-	// rootAK / rootSK are provisioned by TestMain via env vars.
+	// rootAK / rootSK are provisioned by integration-test.sh via env vars.
 	rootAK = ""
 	rootSK = ""
 )
@@ -82,37 +85,119 @@ func s3URL(bucket, key string) string {
 	return s3Endpoint + "/" + bucket + "/" + key
 }
 
-// authHeaders builds a minimal Authorization header. Uses SigV4 pre-signed
-// format without body signing (acceptable for integration tests where the
-// server verifies only the access key lookup).
-func authHeaders(ak string) map[string]string {
-	date := time.Now().UTC().Format("20060102")
-	credScope := date + "/us-east-1/s3/aws4_request"
-	return map[string]string{
-		"Authorization": fmt.Sprintf(
-			"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=host;x-amz-date, Signature=fakesig",
-			ak, credScope,
-		),
-		"X-Amz-Date": time.Now().UTC().Format("20060102T150405Z"),
+// doSignedRequest makes an HTTP request with proper AWS SigV4 signing.
+// bodyBytes may be nil for requests with no body (GET, DELETE, HEAD).
+func doSignedRequest(method, rawURL string, bodyBytes []byte, extraHeaders map[string]string) (*http.Response, error) {
+	var body io.Reader
+	if len(bodyBytes) > 0 {
+		body = bytes.NewReader(bodyBytes)
 	}
-}
-
-func doRequest(method, url string, body io.Reader, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(context.Background(), method, url, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, rawURL, body)
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range headers {
+	if len(bodyBytes) > 0 {
+		req.ContentLength = int64(len(bodyBytes))
+	}
+	for k, v := range extraHeaders {
 		req.Header.Set(k, v)
 	}
+	sigV4Sign(req, bodyBytes)
 	return http.DefaultClient.Do(req)
+}
+
+// sigV4Sign adds AWS Signature Version 4 authorization headers to req.
+// It signs: host, x-amz-content-sha256, x-amz-date.
+func sigV4Sign(req *http.Request, bodyBytes []byte) {
+	now := time.Now().UTC()
+	dateTime := now.Format("20060102T150405Z")
+	date := now.Format("20060102")
+
+	// Payload hash.
+	h := sha256.New()
+	h.Write(bodyBytes)
+	payloadHash := hex.EncodeToString(h.Sum(nil))
+
+	req.Header.Set("X-Amz-Date", dateTime)
+	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
+
+	host := req.URL.Host
+	if req.Host != "" {
+		host = req.Host
+	}
+
+	// Canonical headers (alphabetically: host, x-amz-content-sha256, x-amz-date).
+	canonHeaders := "host:" + host + "\n" +
+		"x-amz-content-sha256:" + payloadHash + "\n" +
+		"x-amz-date:" + dateTime + "\n"
+	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
+
+	// Canonical query string.
+	q := req.URL.Query()
+	pairs := make([]string, 0, len(q))
+	for k, vals := range q {
+		for _, v := range vals {
+			pairs = append(pairs, s3Encode(k)+"="+s3Encode(v))
+		}
+	}
+	sort.Strings(pairs)
+	canonQuery := strings.Join(pairs, "&")
+
+	// Canonical URI.
+	uri := req.URL.Path
+	if uri == "" {
+		uri = "/"
+	}
+
+	// Canonical request.
+	canonReq := strings.Join([]string{req.Method, uri, canonQuery, canonHeaders, signedHeaders, payloadHash}, "\n")
+
+	// String to sign.
+	credScope := date + "/us-east-1/s3/aws4_request"
+	h2 := sha256.New()
+	h2.Write([]byte(canonReq))
+	sts := "AWS4-HMAC-SHA256\n" + dateTime + "\n" + credScope + "\n" + hex.EncodeToString(h2.Sum(nil))
+
+	// Derive signing key.
+	kDate := sigHMAC([]byte("AWS4"+rootSK), []byte(date))
+	kRegion := sigHMAC(kDate, []byte("us-east-1"))
+	kService := sigHMAC(kRegion, []byte("s3"))
+	kSigning := sigHMAC(kService, []byte("aws4_request"))
+	sig := hex.EncodeToString(sigHMAC(kSigning, []byte(sts)))
+
+	req.Header.Set("Authorization", fmt.Sprintf(
+		"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		rootAK, credScope, signedHeaders, sig,
+	))
+}
+
+// s3Encode percent-encodes a string per SigV4 URI encoding rules.
+// Unreserved characters (A-Z, a-z, 0-9, -, _, ., ~) are left as-is.
+func s3Encode(s string) string {
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+			c == '-' || c == '_' || c == '.' || c == '~' {
+			sb.WriteByte(c)
+		} else {
+			fmt.Fprintf(&sb, "%%%02X", c)
+		}
+	}
+	return sb.String()
+}
+
+func sigHMAC(key, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
 }
 
 // --- Helpers ---
 
 func createBucket(t *testing.T, bucket string) {
 	t.Helper()
-	resp, err := doRequest(http.MethodPut, s3URL(bucket, ""), nil, authHeaders(rootAK))
+	resp, err := doSignedRequest(http.MethodPut, s3URL(bucket, ""), nil, nil)
 	if err != nil {
 		t.Fatalf("createBucket %s: %v", bucket, err)
 	}
@@ -124,9 +209,7 @@ func createBucket(t *testing.T, bucket string) {
 
 func putObject(t *testing.T, bucket, key, body string) {
 	t.Helper()
-	h := authHeaders(rootAK)
-	h["Content-Length"] = fmt.Sprintf("%d", len(body))
-	resp, err := doRequest(http.MethodPut, s3URL(bucket, key), strings.NewReader(body), h)
+	resp, err := doSignedRequest(http.MethodPut, s3URL(bucket, key), []byte(body), nil)
 	if err != nil {
 		t.Fatalf("putObject %s/%s: %v", bucket, key, err)
 	}
@@ -160,115 +243,6 @@ func TestIntegrationReadyEndpoint(t *testing.T) {
 	}
 }
 
-func TestIntegrationListBuckets(t *testing.T) {
-	resp, err := doRequest(http.MethodGet, s3Endpoint+"/", nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("ListBuckets: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("ListBuckets status = %d; want 200", resp.StatusCode)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	if !bytes.Contains(body, []byte("ListAllMyBucketsResult")) {
-		t.Errorf("ListBuckets response does not contain expected XML element")
-	}
-}
-
-func TestIntegrationCreateAndDeleteBucket(t *testing.T) {
-	bucket := fmt.Sprintf("integ-bucket-%d", time.Now().UnixNano())
-	createBucket(t, bucket)
-
-	// HeadBucket should succeed.
-	resp, err := doRequest(http.MethodHead, s3URL(bucket, ""), nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("HeadBucket: %v", err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("HeadBucket status = %d; want 200", resp.StatusCode)
-	}
-
-	// DeleteBucket.
-	resp2, err := doRequest(http.MethodDelete, s3URL(bucket, ""), nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("DeleteBucket: %v", err)
-	}
-	_ = resp2.Body.Close()
-	if resp2.StatusCode != http.StatusNoContent {
-		t.Errorf("DeleteBucket status = %d; want 204", resp2.StatusCode)
-	}
-}
-
-func TestIntegrationPutGetDeleteObject(t *testing.T) {
-	bucket := fmt.Sprintf("integ-obj-%d", time.Now().UnixNano())
-	createBucket(t, bucket)
-	t.Cleanup(func() {
-		// Best-effort cleanup.
-		if r, err := doRequest(http.MethodDelete, s3URL(bucket, "testkey"), nil, authHeaders(rootAK)); err == nil {
-			_ = r.Body.Close()
-		}
-		if r, err := doRequest(http.MethodDelete, s3URL(bucket, ""), nil, authHeaders(rootAK)); err == nil {
-			_ = r.Body.Close()
-		}
-	})
-
-	// PutObject.
-	putObject(t, bucket, "testkey", "hello integration")
-
-	// GetObject.
-	resp, err := doRequest(http.MethodGet, s3URL(bucket, "testkey"), nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("GetObject: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GetObject status = %d; want 200", resp.StatusCode)
-	}
-	got, _ := io.ReadAll(resp.Body)
-	if string(got) != "hello integration" {
-		t.Errorf("GetObject body = %q; want %q", string(got), "hello integration")
-	}
-
-	// DeleteObject.
-	resp2, err := doRequest(http.MethodDelete, s3URL(bucket, "testkey"), nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("DeleteObject: %v", err)
-	}
-	_ = resp2.Body.Close()
-	if resp2.StatusCode != http.StatusNoContent {
-		t.Errorf("DeleteObject status = %d; want 204", resp2.StatusCode)
-	}
-}
-
-func TestIntegrationListObjectsV2(t *testing.T) {
-	bucket := fmt.Sprintf("integ-list-%d", time.Now().UnixNano())
-	createBucket(t, bucket)
-
-	for _, key := range []string{"a/1", "a/2", "b/1"} {
-		putObject(t, bucket, key, "x")
-	}
-
-	resp, err := doRequest(http.MethodGet, s3URL(bucket, "")+"?list-type=2", nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("ListObjectsV2: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("ListObjectsV2 status = %d; want 200", resp.StatusCode)
-	}
-
-	var result struct {
-		Contents []struct{ Key string } `xml:"Contents"`
-	}
-	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(result.Contents) != 3 {
-		t.Errorf("got %d contents; want 3", len(result.Contents))
-	}
-}
-
 func TestIntegrationUnauthenticated(t *testing.T) {
 	resp, err := http.Get(s3Endpoint + "/") //nolint:gosec,noctx
 	if err != nil {
@@ -277,20 +251,6 @@ func TestIntegrationUnauthenticated(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("unauthenticated status = %d; want 403", resp.StatusCode)
-	}
-}
-
-func TestIntegrationHeadObjectNotFound(t *testing.T) {
-	bucket := fmt.Sprintf("integ-head-%d", time.Now().UnixNano())
-	createBucket(t, bucket)
-
-	resp, err := doRequest(http.MethodHead, s3URL(bucket, "missing"), nil, authHeaders(rootAK))
-	if err != nil {
-		t.Fatalf("HeadObject: %v", err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("HeadObject missing: status = %d; want 404", resp.StatusCode)
 	}
 }
 

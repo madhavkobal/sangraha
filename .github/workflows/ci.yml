@@ -92,8 +92,6 @@ jobs:
 
       - name: Run integration tests
         run: ./scripts/integration-test.sh
-        # Full implementation lands in Sprint 1.6; placeholder exits 0
-        continue-on-error: true
 
   web:
     name: Web dashboard — lint / build
