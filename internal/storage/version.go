@@ -118,8 +118,10 @@ func newVersionID() string {
 }
 
 // versionedBackendKey returns the storage key for a versioned object copy.
+// ".v." is filesystem-safe (no null bytes); version IDs are UUIDs, making
+// accidental collision with real object keys negligibly unlikely.
 func versionedBackendKey(key, versionID string) string {
-	return key + ".\x00v." + versionID
+	return key + ".v." + versionID
 }
 
 // putVersionRecord stores a version record after a successful PutObject.

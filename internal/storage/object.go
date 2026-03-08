@@ -286,6 +286,10 @@ func (e *Engine) DeleteObject(ctx context.Context, in DeleteObjectInput) (Delete
 		if merr != nil {
 			return DeleteObjectOutput{}, fmt.Errorf("delete object: put delete marker: %w", merr)
 		}
+		// Remove from the main object index so GetObject returns 404.
+		if derr := e.meta.DeleteObject(ctx, in.Bucket, in.Key); derr != nil && !isNotFound(derr) {
+			return DeleteObjectOutput{}, fmt.Errorf("delete object: remove index: %w", derr)
+		}
 		return DeleteObjectOutput{VersionID: vid, DeleteMarker: true}, nil
 	}
 

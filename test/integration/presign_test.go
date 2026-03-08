@@ -27,9 +27,11 @@ func buildPresignedURL(bucket, key string, expires time.Duration) string {
 
 	signedHeaders := "host"
 
+	// SigV4 requires "/" encoded as "%2F" in the canonical query string.
+	encodedCredential := strings.ReplaceAll(credential, "/", "%2F")
 	qs := fmt.Sprintf(
 		"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=%s&X-Amz-Date=%s&X-Amz-Expires=%s&X-Amz-SignedHeaders=%s",
-		credential,
+		encodedCredential,
 		dateTime,
 		expireSec,
 		signedHeaders,
@@ -175,9 +177,11 @@ func buildExpiredPresignedURL(bucket, key string) string {
 	credScope := date + "/" + region + "/s3/aws4_request"
 	credential := rootAK + "/" + credScope
 
+	// SigV4 requires "/" encoded as "%2F" in the canonical query string.
+	encodedCredential := strings.ReplaceAll(credential, "/", "%2F")
 	qs := fmt.Sprintf(
 		"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=%s&X-Amz-Date=%s&X-Amz-Expires=1&X-Amz-SignedHeaders=host",
-		credential, dateTime,
+		encodedCredential, dateTime,
 	)
 	path := "/" + bucket + "/" + key
 	canonicalRequest := "GET\n" + path + "\n" + qs + "\nhost:" + host + "\n\nhost\nUNSIGNED-PAYLOAD"
