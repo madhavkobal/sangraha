@@ -31,10 +31,10 @@ const (
 
 // NotificationEvent is the JSON payload delivered to webhooks.
 type NotificationEvent struct {
-	EventVersion string          `json:"eventVersion"`
-	EventSource  string          `json:"eventSource"`
-	EventTime    time.Time       `json:"eventTime"`
-	EventName    EventType       `json:"eventName"`
+	EventVersion string    `json:"eventVersion"`
+	EventSource  string    `json:"eventSource"`
+	EventTime    time.Time `json:"eventTime"`
+	EventName    EventType `json:"eventName"`
 	UserIdentity struct {
 		PrincipalID string `json:"principalId"`
 	} `json:"userIdentity"`

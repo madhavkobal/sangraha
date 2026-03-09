@@ -35,7 +35,7 @@ type WebsiteCondition struct {
 // WebsiteRedirect describes the redirect target.
 type WebsiteRedirect struct {
 	HostName             string `json:"host_name,omitempty"`
-	Protocol             string `json:"protocol,omitempty"`              // "http" or "https"
+	Protocol             string `json:"protocol,omitempty"` // "http" or "https"
 	ReplaceKeyPrefixWith string `json:"replace_key_prefix_with,omitempty"`
 	ReplaceKeyWith       string `json:"replace_key_with,omitempty"`
 	HTTPRedirectCode     string `json:"http_redirect_code,omitempty"` // e.g. "301"
@@ -95,26 +95,26 @@ type ReplicationDest struct {
 	// or sangraha URI (sangraha://host:port/bucket-name).
 	BucketARN    string `json:"bucket_arn"`
 	StorageClass string `json:"storage_class,omitempty"`
-	Endpoint     string `json:"endpoint,omitempty"`  // base URL of destination sangraha
+	Endpoint     string `json:"endpoint,omitempty"` // base URL of destination sangraha
 	AccessKey    string `json:"access_key,omitempty"`
 	SecretKey    string `json:"secret_key,omitempty"` //nolint:gosec // not a hardcoded credential
 }
 
 // BucketRecord holds the persisted metadata for a bucket.
 type BucketRecord struct {
-	Name           string              `json:"name"`
-	CreatedAt      time.Time           `json:"created_at"`
-	Owner          string              `json:"owner"`
-	Region         string              `json:"region"`
-	Versioning     string              `json:"versioning"` // "disabled" | "enabled" | "suspended"
-	ACL            string              `json:"acl"`
-	ObjectCount    int64               `json:"object_count"`
-	TotalBytes     int64               `json:"total_bytes"`
-	Policy         string              `json:"policy,omitempty"`          // JSON bucket policy
-	CORSRules      []CORSRule          `json:"cors_rules,omitempty"`      // per-bucket CORS
-	LifecycleRules []LifecycleRule     `json:"lifecycle_rules,omitempty"` // expiration rules
-	Tags           map[string]string   `json:"tags,omitempty"`            // bucket tags
-	SSEAlgorithm   string              `json:"sse_algorithm,omitempty"`   // "AES256" or ""
+	Name           string            `json:"name"`
+	CreatedAt      time.Time         `json:"created_at"`
+	Owner          string            `json:"owner"`
+	Region         string            `json:"region"`
+	Versioning     string            `json:"versioning"` // "disabled" | "enabled" | "suspended"
+	ACL            string            `json:"acl"`
+	ObjectCount    int64             `json:"object_count"`
+	TotalBytes     int64             `json:"total_bytes"`
+	Policy         string            `json:"policy,omitempty"`          // JSON bucket policy
+	CORSRules      []CORSRule        `json:"cors_rules,omitempty"`      // per-bucket CORS
+	LifecycleRules []LifecycleRule   `json:"lifecycle_rules,omitempty"` // expiration rules
+	Tags           map[string]string `json:"tags,omitempty"`            // bucket tags
+	SSEAlgorithm   string            `json:"sse_algorithm,omitempty"`   // "AES256" or ""
 	// Phase 3 fields.
 	Quota         *BucketQuota        `json:"quota,omitempty"`         // storage quotas
 	Website       *WebsiteConfig      `json:"website,omitempty"`       // static website hosting

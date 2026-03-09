@@ -96,17 +96,17 @@ func (h *Handler) deleteBucketReplication(w http.ResponseWriter, r *http.Request
 // --- XML types ---
 
 type xmlReplicationConfiguration struct {
-	XMLName xml.Name              `xml:"ReplicationConfiguration"`
-	Role    string                `xml:"Role"`
-	Rules   []xmlReplicationRule  `xml:"Rule"`
+	XMLName xml.Name             `xml:"ReplicationConfiguration"`
+	Role    string               `xml:"Role"`
+	Rules   []xmlReplicationRule `xml:"Rule"`
 }
 
 type xmlReplicationRule struct {
-	ID                      string                      `xml:"ID,omitempty"`
-	Status                  string                      `xml:"Status"`
-	Filter                  xmlReplFilter               `xml:"Filter"`
-	Destination             xmlReplDest                 `xml:"Destination"`
-	DeleteMarkerReplication xmlDeleteMarkerReplication  `xml:"DeleteMarkerReplication,omitempty"`
+	ID                      string                     `xml:"ID,omitempty"`
+	Status                  string                     `xml:"Status"`
+	Filter                  xmlReplFilter              `xml:"Filter"`
+	Destination             xmlReplDest                `xml:"Destination"`
+	DeleteMarkerReplication xmlDeleteMarkerReplication `xml:"DeleteMarkerReplication,omitempty"`
 }
 
 type xmlReplFilter struct {

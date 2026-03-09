@@ -35,39 +35,7 @@ func (h *Handler) listBuckets(w http.ResponseWriter, r *http.Request) {
 // createBucket handles PUT /{bucket} — CreateBucket and PUT subresource dispatch.
 func (h *Handler) createBucket(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
-	q := r.URL.Query()
-
-	// Dispatch PUT subresources (Phase 2 + Phase 3).
-	switch {
-	case q.Has("versioning"):
-		h.putBucketVersioning(w, r, bucket)
-		return
-	case q.Has("cors"):
-		h.putBucketCORS(w, r, bucket)
-		return
-	case q.Has("policy"):
-		h.putBucketPolicy(w, r, bucket)
-		return
-	case q.Has("lifecycle"):
-		h.putBucketLifecycle(w, r, bucket)
-		return
-	case q.Has("tagging"):
-		h.putBucketTagging(w, r, bucket)
-		return
-	case q.Has("encryption"):
-		h.putBucketEncryption(w, r, bucket)
-		return
-	case q.Has("acl"):
-		h.putBucketACL(w, r, bucket)
-		return
-	case q.Has("website"):
-		h.putBucketWebsite(w, r, bucket)
-		return
-	case q.Has("notification"):
-		h.putBucketNotification(w, r, bucket)
-		return
-	case q.Has("replication"):
-		h.putBucketReplication(w, r, bucket)
+	if h.dispatchPutBucketSubresource(w, r, bucket) {
 		return
 	}
 
@@ -118,39 +86,19 @@ func (h *Handler) deleteBucket(w http.ResponseWriter, r *http.Request) {
 	// Dispatch DELETE subresources (Phase 2 + Phase 3).
 	switch {
 	case q.Has("cors"):
-		if err := h.engine.DeleteCORSRules(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteCORSRules(r.Context(), bucket) })
 		return
 	case q.Has("policy"):
-		if err := h.engine.DeleteBucketPolicy(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteBucketPolicy(r.Context(), bucket) })
 		return
 	case q.Has("lifecycle"):
-		if err := h.engine.DeleteLifecycleRules(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteLifecycleRules(r.Context(), bucket) })
 		return
 	case q.Has("tagging"):
-		if err := h.engine.DeleteBucketTags(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteBucketTags(r.Context(), bucket) })
 		return
 	case q.Has("encryption"):
-		if err := h.engine.SetBucketEncryption(r.Context(), bucket, ""); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.SetBucketEncryption(r.Context(), bucket, "") })
 		return
 	case q.Has("website"):
 		h.deleteBucketWebsite(w, r, bucket)
@@ -220,6 +168,15 @@ func (h *Handler) getBucketSubresource(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) putBucketSubresource(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
+	if !h.dispatchPutBucketSubresource(w, r, bucket) {
+		// No subresource matched — treat as plain CreateBucket.
+		h.createBucket(w, r)
+	}
+}
+
+// dispatchPutBucketSubresource routes PUT /{bucket}?<subresource> to the
+// appropriate handler. Returns true if a subresource was matched and handled.
+func (h *Handler) dispatchPutBucketSubresource(w http.ResponseWriter, r *http.Request, bucket string) bool {
 	q := r.URL.Query()
 	switch {
 	case q.Has("versioning"):
@@ -243,9 +200,9 @@ func (h *Handler) putBucketSubresource(w http.ResponseWriter, r *http.Request) {
 	case q.Has("replication"):
 		h.putBucketReplication(w, r, bucket)
 	default:
-		// Fall through to create-bucket for plain PUT /{bucket}
-		h.createBucket(w, r)
+		return false
 	}
+	return true
 }
 
 func (h *Handler) deleteBucketSubresource(w http.ResponseWriter, r *http.Request) {
@@ -253,35 +210,15 @@ func (h *Handler) deleteBucketSubresource(w http.ResponseWriter, r *http.Request
 	q := r.URL.Query()
 	switch {
 	case q.Has("cors"):
-		if err := h.engine.DeleteCORSRules(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteCORSRules(r.Context(), bucket) })
 	case q.Has("policy"):
-		if err := h.engine.DeleteBucketPolicy(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteBucketPolicy(r.Context(), bucket) })
 	case q.Has("lifecycle"):
-		if err := h.engine.DeleteLifecycleRules(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteLifecycleRules(r.Context(), bucket) })
 	case q.Has("tagging"):
-		if err := h.engine.DeleteBucketTags(r.Context(), bucket); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.DeleteBucketTags(r.Context(), bucket) })
 	case q.Has("encryption"):
-		if err := h.engine.SetBucketEncryption(r.Context(), bucket, ""); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		deleteWithNoContent(w, r, func() error { return h.engine.SetBucketEncryption(r.Context(), bucket, "") })
 	case q.Has("website"):
 		h.deleteBucketWebsite(w, r, bucket)
 	case q.Has("replication"):
@@ -289,6 +226,15 @@ func (h *Handler) deleteBucketSubresource(w http.ResponseWriter, r *http.Request
 	default:
 		h.deleteBucket(w, r)
 	}
+}
+
+// deleteWithNoContent calls fn and writes 204 on success or 500 on error.
+func deleteWithNoContent(w http.ResponseWriter, r *http.Request, fn func() error) {
+	if err := fn(); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "InternalError", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // deleteObjects handles POST /{bucket}?delete — DeleteObjects.

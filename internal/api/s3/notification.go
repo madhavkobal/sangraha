@@ -89,17 +89,17 @@ type xmlNotificationConfiguration struct {
 }
 
 type xmlQueueConfig struct {
-	ID     string            `xml:"Id"`
-	Queue  string            `xml:"Queue"`
-	Events []string          `xml:"Event"`
-	Filter xmlNotifFilter    `xml:"Filter"`
+	ID     string         `xml:"Id"`
+	Queue  string         `xml:"Queue"`
+	Events []string       `xml:"Event"`
+	Filter xmlNotifFilter `xml:"Filter"`
 }
 
 type xmlTopicConfig struct {
-	ID     string            `xml:"Id"`
-	Topic  string            `xml:"Topic"`
-	Events []string          `xml:"Event"`
-	Filter xmlNotifFilter    `xml:"Filter"`
+	ID     string         `xml:"Id"`
+	Topic  string         `xml:"Topic"`
+	Events []string       `xml:"Event"`
+	Filter xmlNotifFilter `xml:"Filter"`
 }
 
 type xmlNotifFilter struct {
@@ -111,7 +111,7 @@ type xmlS3KeyFilter struct {
 }
 
 type xmlFilterRule struct {
-	Name  string `xml:"Name"`  // "prefix" or "suffix"
+	Name  string `xml:"Name"` // "prefix" or "suffix"
 	Value string `xml:"Value"`
 }
 

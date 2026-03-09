@@ -123,19 +123,13 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 	if err != nil {
 		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: get bucket: %w", err)
 	}
-	// Calculate total size from part records for quota check.
+	// Load part records once; used for quota check and size accounting.
 	allParts, err := e.meta.ListParts(ctx, in.UploadID)
 	if err != nil {
-		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: list parts for quota: %w", err)
+		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: list parts: %w", err)
 	}
-	var quotaSize int64
-	partSizes := make(map[int]int64, len(allParts))
-	for _, p := range allParts {
-		partSizes[p.PartNumber] = p.Size
-	}
-	for _, cp := range in.Parts {
-		quotaSize += partSizes[cp.PartNumber]
-	}
+
+	quotaSize := multipartTotalSize(allParts, in.Parts)
 	if qerr := checkQuota(bucketRec, quotaSize); qerr != nil {
 		return metadata.ObjectRecord{}, qerr
 	}
@@ -145,30 +139,7 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 		return in.Parts[i].PartNumber < in.Parts[j].PartNumber
 	})
 
-	// Build a reader that concatenates all part streams.
-	readers := make([]io.Reader, 0, len(in.Parts))
-	partETags := make([]string, 0, len(in.Parts))
-	var totalSize int64
-	for _, cp := range in.Parts {
-		partKey := fmt.Sprintf(".multipart/%s/%05d", in.UploadID, cp.PartNumber)
-		pr, pw := io.Pipe()
-		go func(key string, pw *io.PipeWriter) {
-			rerr := e.backend.Read(ctx, m.Bucket, key, pw)
-			pw.CloseWithError(rerr)
-		}(partKey, pw)
-		readers = append(readers, pr)
-
-		// Get part size from already-loaded part records.
-		for _, p := range allParts {
-			if p.PartNumber == cp.PartNumber {
-				totalSize += p.Size
-				break
-			}
-		}
-		partETags = append(partETags, cp.ETag)
-	}
-
-	combined := io.MultiReader(readers...)
+	combined, partETags, totalSize := e.assemblePartReaders(ctx, m.Bucket, in.UploadID, in.Parts, allParts)
 	_, err = e.backend.Write(ctx, m.Bucket, m.Key, combined, totalSize)
 	if err != nil {
 		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: write final: %w", err)
@@ -191,17 +162,8 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: store object: %w", err)
 	}
 	_ = e.meta.UpdateBucketStats(ctx, m.Bucket, 1, totalSize)
-
-	// Enqueue replication if configured.
-	if bucketRec.Replication != nil && e.replication != nil {
-		e.replication.Enqueue(m.Bucket, m.Key, bucketRec.Replication.Rules)
-	}
-	// Fire webhook notifications if configured.
-	if bucketRec.Notifications != nil && e.webhooks != nil {
-		ev := buildObjectCreatedEvent(m.Bucket, m.Key, rec.ETag, m.Owner, totalSize,
-			EventObjectCreatedMultipartCompleted)
-		e.webhooks.Dispatch(bucketRec.Notifications, ev)
-	}
+	e.fireObjectCreatedSideEffects(m.Bucket, m.Key, rec.ETag, m.Owner, totalSize, bucketRec,
+		EventObjectCreatedMultipartCompleted)
 
 	// Clean up the in-progress upload record and part data.
 	e.cleanupMultipart(ctx, in.UploadID, m.Bucket, len(in.Parts))
@@ -244,6 +206,43 @@ func (e *Engine) ListParts(ctx context.Context, uploadID string) ([]metadata.Par
 // ListMultipartUploads returns all in-progress uploads for a bucket.
 func (e *Engine) ListMultipartUploads(ctx context.Context, bucket string) ([]metadata.MultipartRecord, error) {
 	return e.meta.ListMultiparts(ctx, bucket)
+}
+
+// multipartTotalSize returns the sum of the sizes of the selected parts.
+func multipartTotalSize(allParts []metadata.PartRecord, selected []CompletePart) int64 {
+	sizeByNumber := make(map[int]int64, len(allParts))
+	for _, p := range allParts {
+		sizeByNumber[p.PartNumber] = p.Size
+	}
+	var total int64
+	for _, cp := range selected {
+		total += sizeByNumber[cp.PartNumber]
+	}
+	return total
+}
+
+// assemblePartReaders creates a concatenated reader over all selected parts' backend data,
+// and returns it along with the per-part ETags and total assembled size.
+func (e *Engine) assemblePartReaders(ctx context.Context, bucket, uploadID string, selected []CompletePart, allParts []metadata.PartRecord) (io.Reader, []string, int64) {
+	sizeByNumber := make(map[int]int64, len(allParts))
+	for _, p := range allParts {
+		sizeByNumber[p.PartNumber] = p.Size
+	}
+	readers := make([]io.Reader, 0, len(selected))
+	etags := make([]string, 0, len(selected))
+	var totalSize int64
+	for _, cp := range selected {
+		partKey := fmt.Sprintf(".multipart/%s/%05d", uploadID, cp.PartNumber)
+		pr, pw := io.Pipe()
+		go func(key string, pw *io.PipeWriter) {
+			rerr := e.backend.Read(ctx, bucket, key, pw)
+			pw.CloseWithError(rerr)
+		}(partKey, pw)
+		readers = append(readers, pr)
+		totalSize += sizeByNumber[cp.PartNumber]
+		etags = append(etags, cp.ETag)
+	}
+	return io.MultiReader(readers...), etags, totalSize
 }
 
 func (e *Engine) cleanupMultipart(ctx context.Context, uploadID, bucket string, numParts int) {
