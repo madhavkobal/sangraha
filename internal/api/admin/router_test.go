@@ -24,7 +24,7 @@ func setupKeyStore(t *testing.T) *auth.KeyStore {
 
 func TestAdminRouterHealth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/health", nil)
 	rr := httptest.NewRecorder()
@@ -37,7 +37,7 @@ func TestAdminRouterHealth(t *testing.T) {
 
 func TestAdminRouterReady(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/ready", nil)
 	rr := httptest.NewRecorder()
@@ -50,7 +50,7 @@ func TestAdminRouterReady(t *testing.T) {
 
 func TestAdminRouterInfo(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v2.0.0", "2026-03-05T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v2.0.0", "2026-03-05T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/info", nil)
 	rr := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestAdminRouterInfo(t *testing.T) {
 
 func TestAdminRouterMetrics(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/metrics", nil)
 	rr := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestAdminRouterMetrics(t *testing.T) {
 
 func TestAdminRouterUsersUnauth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	// Unauthenticated request to protected endpoint.
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/users", nil)
@@ -90,7 +90,7 @@ func TestAdminRouterUsersUnauth(t *testing.T) {
 
 func TestAdminRouterTLSInfo(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	// TLS info is auth-protected; unauthenticated must not return 200.
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/tls", nil)
@@ -103,7 +103,7 @@ func TestAdminRouterTLSInfo(t *testing.T) {
 
 func TestAdminRouterConnections(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/connections", nil)
 	rr := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestAdminRouterConnections(t *testing.T) {
 
 func TestAdminRouterGCStatus(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/gc/status", nil)
 	rr := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestAdminRouterGCStatus(t *testing.T) {
 
 func TestAdminRouterServerReload(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/server/reload", nil)
 	rr := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestAdminRouterServerReload(t *testing.T) {
 
 func TestAdminRouterExportUnauth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/admin/v1/export", nil)
 	rr := httptest.NewRecorder()
@@ -151,7 +151,7 @@ func TestAdminRouterExportUnauth(t *testing.T) {
 
 func TestAdminRouterBackupScheduleUnauth(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/v1/backup/schedule", nil)
 	rr := httptest.NewRecorder()
@@ -163,7 +163,7 @@ func TestAdminRouterBackupScheduleUnauth(t *testing.T) {
 
 func TestAdminRouterLogStream(t *testing.T) {
 	ks := setupKeyStore(t)
-	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{})
+	handler := New(ks, nil, nil, "v1.0.0", "2026-01-01T00:00:00Z", "http://localhost:9000", &config.Config{}, nil)
 
 	// Use a pre-cancelled context so the SSE handler exits immediately after
 	// writing the initial 200 + "connected" comment, avoiding any blocking.
