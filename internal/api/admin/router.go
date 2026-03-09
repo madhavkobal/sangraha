@@ -10,6 +10,7 @@ import (
 	"github.com/madhavkobal/sangraha/internal/api/middleware"
 	"github.com/madhavkobal/sangraha/internal/audit"
 	"github.com/madhavkobal/sangraha/internal/auth"
+	"github.com/madhavkobal/sangraha/internal/cluster"
 	"github.com/madhavkobal/sangraha/internal/config"
 	"github.com/madhavkobal/sangraha/internal/storage"
 	"github.com/madhavkobal/sangraha/internal/web"
@@ -18,12 +19,14 @@ import (
 // New creates the admin API HTTP handler and registers all routes.
 // cfg is the current running configuration (mutations via PUT /admin/v1/config
 // apply in-place and are protected by a mutex inside configHandler).
+// clusterNode may be nil when clustering is disabled.
 func New(
 	keyStore *auth.KeyStore,
 	engine *storage.Engine,
 	auditor *audit.Logger,
 	version, buildTime, serverURL string,
 	cfg *config.Config,
+	clusterNode *cluster.Node,
 ) http.Handler {
 	uh := &userHandler{keyStore: keyStore}
 	ph := &presignHandler{keyStore: keyStore, serverURL: serverURL}
@@ -31,6 +34,24 @@ func New(
 	bh := &bucketAdminHandler{engine: engine}
 	ah := &alertHandler{}
 	auh := &auditHandler{auditLogPath: cfg.Logging.AuditLog}
+
+	// Build OIDC / LDAP providers if configured.
+	var oidcProvider *auth.OIDCProvider
+	if cfg.Auth.OIDC.Enabled {
+		p, err := auth.NewOIDCProvider(cfg.Auth.OIDC)
+		if err == nil {
+			oidcProvider = p
+		}
+	}
+	var ldapProvider *auth.LDAPProvider
+	if cfg.Auth.LDAP.Enabled {
+		ldapProvider = auth.NewLDAPProvider(cfg.Auth.LDAP)
+	}
+	extAuth := &authExtHandler{
+		oidc:     oidcProvider,
+		ldap:     ldapProvider,
+		keyStore: keyStore,
+	}
 
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
@@ -40,6 +61,18 @@ func New(
 	r.Get("/admin/v1/health", handleHealth)
 	r.Get("/admin/v1/ready", handleReady)
 	r.Get("/admin/v1/info", handleInfo(version, buildTime))
+
+	// OIDC / LDAP authentication endpoints (no auth required — they ARE auth).
+	r.Get("/admin/v1/auth/oidc/url", extAuth.handleOIDCURL)
+	r.Post("/admin/v1/auth/oidc/callback", extAuth.handleOIDCCallback)
+	r.Post("/admin/v1/auth/ldap", extAuth.handleLDAPAuth)
+
+	// Cluster endpoints (no auth — peers call these during elections).
+	if clusterNode != nil {
+		r.Get("/admin/v1/cluster/status", cluster.HandleStatus(clusterNode))
+		r.Post("/admin/v1/cluster/heartbeat", cluster.HandleHeartbeat(clusterNode))
+		r.Post("/admin/v1/cluster/vote", cluster.HandleVote(clusterNode))
+	}
 
 	// Prometheus metrics (no auth for simplicity).
 	r.Get("/admin/v1/metrics", metricsHandler().ServeHTTP)
