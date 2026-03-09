@@ -882,10 +882,10 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 - [ ] `sangraha init` wizard
 
 ### Milestone 3 — Scale & Enterprise
-- [ ] Object replication
-- [ ] Webhook event notifications
-- [ ] Quota management
-- [ ] Static website hosting
+- [x] Object replication (async worker + S3 replication config API)
+- [x] Webhook event notifications (S3 notification config API + HMAC-signed delivery)
+- [x] Quota management (per-bucket size + object-count limits, enforced on PutObject/CompleteMultipart)
+- [x] Static website hosting (S3 website config API; index/error document + routing rules)
 - [ ] OIDC/LDAP integration
 - [ ] Multi-node clustering (Raft)
 - [ ] Storage tiering

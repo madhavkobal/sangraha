@@ -37,7 +37,7 @@ func (h *Handler) createBucket(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	q := r.URL.Query()
 
-	// Phase 2: dispatch PUT subresources.
+	// Dispatch PUT subresources (Phase 2 + Phase 3).
 	switch {
 	case q.Has("versioning"):
 		h.putBucketVersioning(w, r, bucket)
@@ -59,6 +59,15 @@ func (h *Handler) createBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	case q.Has("acl"):
 		h.putBucketACL(w, r, bucket)
+		return
+	case q.Has("website"):
+		h.putBucketWebsite(w, r, bucket)
+		return
+	case q.Has("notification"):
+		h.putBucketNotification(w, r, bucket)
+		return
+	case q.Has("replication"):
+		h.putBucketReplication(w, r, bucket)
 		return
 	}
 
@@ -106,7 +115,7 @@ func (h *Handler) deleteBucket(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	q := r.URL.Query()
 
-	// Phase 2: dispatch DELETE subresources.
+	// Dispatch DELETE subresources (Phase 2 + Phase 3).
 	switch {
 	case q.Has("cors"):
 		if err := h.engine.DeleteCORSRules(r.Context(), bucket); err != nil {
@@ -142,6 +151,12 @@ func (h *Handler) deleteBucket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+		return
+	case q.Has("website"):
+		h.deleteBucketWebsite(w, r, bucket)
+		return
+	case q.Has("replication"):
+		h.deleteBucketReplication(w, r, bucket)
 		return
 	}
 
@@ -192,6 +207,12 @@ func (h *Handler) getBucketSubresource(w http.ResponseWriter, r *http.Request) {
 		h.getBucketACL(w, r, bucket)
 	case q.Has("versions"):
 		h.listObjectVersions(w, r, bucket)
+	case q.Has("website"):
+		h.getBucketWebsite(w, r, bucket)
+	case q.Has("notification"):
+		h.getBucketNotification(w, r, bucket)
+	case q.Has("replication"):
+		h.getBucketReplication(w, r, bucket)
 	default:
 		writeError(w, r, http.StatusBadRequest, "InvalidRequest", "unsupported subresource")
 	}
@@ -215,6 +236,12 @@ func (h *Handler) putBucketSubresource(w http.ResponseWriter, r *http.Request) {
 		h.putBucketEncryption(w, r, bucket)
 	case q.Has("acl"):
 		h.putBucketACL(w, r, bucket)
+	case q.Has("website"):
+		h.putBucketWebsite(w, r, bucket)
+	case q.Has("notification"):
+		h.putBucketNotification(w, r, bucket)
+	case q.Has("replication"):
+		h.putBucketReplication(w, r, bucket)
 	default:
 		// Fall through to create-bucket for plain PUT /{bucket}
 		h.createBucket(w, r)
@@ -255,6 +282,10 @@ func (h *Handler) deleteBucketSubresource(w http.ResponseWriter, r *http.Request
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	case q.Has("website"):
+		h.deleteBucketWebsite(w, r, bucket)
+	case q.Has("replication"):
+		h.deleteBucketReplication(w, r, bucket)
 	default:
 		h.deleteBucket(w, r)
 	}

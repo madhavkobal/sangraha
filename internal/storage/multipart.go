@@ -118,6 +118,28 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: get upload: %w", err)
 	}
 
+	// Enforce quota before assembling.
+	bucketRec, err := e.meta.GetBucket(ctx, m.Bucket)
+	if err != nil {
+		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: get bucket: %w", err)
+	}
+	// Calculate total size from part records for quota check.
+	allParts, err := e.meta.ListParts(ctx, in.UploadID)
+	if err != nil {
+		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: list parts for quota: %w", err)
+	}
+	var quotaSize int64
+	partSizes := make(map[int]int64, len(allParts))
+	for _, p := range allParts {
+		partSizes[p.PartNumber] = p.Size
+	}
+	for _, cp := range in.Parts {
+		quotaSize += partSizes[cp.PartNumber]
+	}
+	if qerr := checkQuota(bucketRec, quotaSize); qerr != nil {
+		return metadata.ObjectRecord{}, qerr
+	}
+
 	// Sort parts by part number.
 	sort.Slice(in.Parts, func(i, j int) bool {
 		return in.Parts[i].PartNumber < in.Parts[j].PartNumber
@@ -136,12 +158,8 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 		}(partKey, pw)
 		readers = append(readers, pr)
 
-		// Get part size from metadata.
-		parts, lerr := e.meta.ListParts(ctx, in.UploadID)
-		if lerr != nil {
-			return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: list parts: %w", lerr)
-		}
-		for _, p := range parts {
+		// Get part size from already-loaded part records.
+		for _, p := range allParts {
 			if p.PartNumber == cp.PartNumber {
 				totalSize += p.Size
 				break
@@ -173,6 +191,17 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, in CompleteMultipa
 		return metadata.ObjectRecord{}, fmt.Errorf("complete multipart: store object: %w", err)
 	}
 	_ = e.meta.UpdateBucketStats(ctx, m.Bucket, 1, totalSize)
+
+	// Enqueue replication if configured.
+	if bucketRec.Replication != nil && e.replication != nil {
+		e.replication.Enqueue(m.Bucket, m.Key, bucketRec.Replication.Rules)
+	}
+	// Fire webhook notifications if configured.
+	if bucketRec.Notifications != nil && e.webhooks != nil {
+		ev := buildObjectCreatedEvent(m.Bucket, m.Key, rec.ETag, m.Owner, totalSize,
+			EventObjectCreatedMultipartCompleted)
+		e.webhooks.Dispatch(bucketRec.Notifications, ev)
+	}
 
 	// Clean up the in-progress upload record and part data.
 	e.cleanupMultipart(ctx, in.UploadID, m.Bucket, len(in.Parts))

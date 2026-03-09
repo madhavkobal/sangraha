@@ -84,6 +84,11 @@ func New(
 		r.Get("/admin/v1/buckets/{name}/objects", bh.listObjects)
 		r.Delete("/admin/v1/buckets/{name}/objects/*", bh.deleteObject)
 
+		// Quota management (Phase 3).
+		r.Get("/admin/v1/buckets/{name}/quota", bh.getQuota)
+		r.Put("/admin/v1/buckets/{name}/quota", bh.putQuota)
+		r.Delete("/admin/v1/buckets/{name}/quota", bh.deleteQuota)
+
 		// Alert rules + history.
 		r.Get("/admin/v1/alerts", ah.listRules)
 		r.Post("/admin/v1/alerts", ah.createRule)

@@ -60,6 +60,11 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 		return PutObjectOutput{}, fmt.Errorf("put object: check bucket: %w", err)
 	}
 
+	// Enforce storage quota before writing any data.
+	if err = checkQuota(bucketRec, in.Size); err != nil {
+		return PutObjectOutput{}, err
+	}
+
 	body, sseAlg, encryptedKey, err := e.applySSE(in, bucketRec.SSEAlgorithm)
 	if err != nil {
 		return PutObjectOutput{}, err
@@ -113,6 +118,15 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 	}
 	if err = e.meta.UpdateBucketStats(ctx, in.Bucket, deltaCount, deltaBytes); err != nil {
 		_ = err // non-fatal
+	}
+	// Enqueue replication if configured.
+	if bucketRec.Replication != nil && e.replication != nil {
+		e.replication.Enqueue(in.Bucket, in.Key, bucketRec.Replication.Rules)
+	}
+	// Fire webhook notifications if configured.
+	if bucketRec.Notifications != nil && e.webhooks != nil {
+		ev := buildObjectCreatedEvent(in.Bucket, in.Key, etag, in.Owner, n, EventObjectCreatedPut)
+		e.webhooks.Dispatch(bucketRec.Notifications, ev)
 	}
 	return PutObjectOutput{ETag: etag, VersionID: versionID, LastModified: now, Size: n, SSEAlgorithm: sseAlg}, nil
 }
@@ -315,6 +329,11 @@ func (e *Engine) DeleteObject(ctx context.Context, in DeleteObjectInput) (Delete
 		return DeleteObjectOutput{}, fmt.Errorf("delete object: metadata delete: %w", err)
 	}
 	_ = e.meta.UpdateBucketStats(ctx, in.Bucket, -1, -rec.Size)
+	// Fire webhook notifications if configured.
+	if bkt.Notifications != nil && e.webhooks != nil {
+		ev := buildObjectRemovedEvent(in.Bucket, in.Key, in.Owner)
+		e.webhooks.Dispatch(bkt.Notifications, ev)
+	}
 	return DeleteObjectOutput{}, nil
 }
 
