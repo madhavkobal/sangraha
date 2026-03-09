@@ -174,23 +174,3 @@ func pollExportStatus(op string) error {
 	}
 }
 
-// writeAdminToken writes the admin bearer token to ~/.sangraha/admin-token.
-// Called by sangraha init after authentication is set up.
-func writeAdminToken(token string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("resolve home dir: %w", err)
-	}
-	dir := homeDir + "/.sangraha"
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-	tokenPath := dir + "/admin-token"
-	return os.WriteFile(tokenPath, []byte(token), 0600)
-}
-
-// readBodyAll is a helper used in admin operations to drain a response body.
-func readBodyAll(r io.Reader) string {
-	b, _ := io.ReadAll(r)
-	return string(b)
-}

@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/madhavkobal/sangraha/internal/auth"
+	"github.com/madhavkobal/sangraha/internal/backend/tiered"
+	"github.com/madhavkobal/sangraha/internal/cluster"
 )
 
 // Config is the top-level configuration structure for the sangraha server.
@@ -18,6 +22,7 @@ type Config struct {
 	Auth     AuthConfig     `mapstructure:"auth"`
 	Logging  LoggingConfig  `mapstructure:"logging"`
 	Limits   LimitsConfig   `mapstructure:"limits"`
+	Cluster  ClusterConfig  `mapstructure:"cluster"`
 }
 
 // ServerConfig holds network and TLS settings.
@@ -37,8 +42,9 @@ type TLSConfig struct {
 
 // StorageConfig controls the storage backend.
 type StorageConfig struct {
-	Backend string `mapstructure:"backend"`
-	DataDir string `mapstructure:"data_dir"`
+	Backend string              `mapstructure:"backend"`
+	DataDir string              `mapstructure:"data_dir"`
+	Tiers   []tiered.TierConfig `mapstructure:"tiers"`
 }
 
 // MetadataConfig controls the metadata store location.
@@ -48,9 +54,19 @@ type MetadataConfig struct {
 
 // AuthConfig holds authentication settings.
 type AuthConfig struct {
-	RootAccessKey string `mapstructure:"root_access_key"`
+	RootAccessKey string          `mapstructure:"root_access_key"`
 	// RootSecretKey must be set via the SANGRAHA_ROOT_SECRET_KEY env var only.
-	RootSecretKey string `mapstructure:"-"`
+	RootSecretKey string          `mapstructure:"-"`
+	OIDC          auth.OIDCConfig `mapstructure:"oidc"`
+	LDAP          auth.LDAPConfig `mapstructure:"ldap"`
+}
+
+// ClusterConfig controls multi-node clustering behaviour.
+type ClusterConfig struct {
+	// Enabled activates cluster mode. When false (default) the node runs in
+	// single-node mode and is always the leader.
+	Enabled bool               `mapstructure:"enabled"`
+	Node    cluster.NodeConfig `mapstructure:"node"`
 }
 
 // LoggingConfig controls log output.
@@ -124,10 +140,13 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("metadata.path must not be empty")
 	}
 	switch cfg.Storage.Backend {
-	case "localfs", "badger":
+	case "localfs", "badger", "tiered":
 		// valid
 	default:
-		return fmt.Errorf("storage.backend %q is not supported; choose localfs or badger", cfg.Storage.Backend)
+		return fmt.Errorf("storage.backend %q is not supported; choose localfs, badger, or tiered", cfg.Storage.Backend)
+	}
+	if cfg.Storage.Backend == "tiered" && len(cfg.Storage.Tiers) == 0 {
+		return fmt.Errorf("storage.backend is \"tiered\" but storage.tiers is empty")
 	}
 	if cfg.Auth.RootAccessKey == "" {
 		return fmt.Errorf("auth.root_access_key must not be empty")
