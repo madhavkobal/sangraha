@@ -18,7 +18,7 @@ interface TableProps<T> {
 
 type SortDir = 'asc' | 'desc'
 
-export default function Table<T extends Record<string, unknown>>({
+export default function Table<T extends object>({
   columns,
   rows,
   keyExtractor,
@@ -39,8 +39,10 @@ export default function Table<T extends Record<string, unknown>>({
 
   const sorted = sortKey
     ? [...rows].sort((a, b) => {
-        const av = a[sortKey]
-        const bv = b[sortKey]
+        const ar = a as Record<string, unknown>
+        const br = b as Record<string, unknown>
+        const av = ar[sortKey]
+        const bv = br[sortKey]
         if (av == null && bv == null) return 0
         if (av == null) return 1
         if (bv == null) return -1
@@ -97,7 +99,7 @@ export default function Table<T extends Record<string, unknown>>({
                     <td key={String(col.key)} className="px-4 py-2.5">
                       {col.render
                         ? col.render(row)
-                        : String(row[col.key as string] ?? '—')}
+                        : String((row as Record<string, unknown>)[col.key as string] ?? '—')}
                     </td>
                   ))}
                 </tr>

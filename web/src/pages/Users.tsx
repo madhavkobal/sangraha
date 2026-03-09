@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, User } from '../api/client'
-import { RotateCcw, Plus, Users as UsersIcon } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, CopyButton, EmptyState, Table } from '../components'
+import { RotateCcw, Plus } from 'lucide-react'
+import { Badge, Button, ConfirmDialog, CopyButton, Table } from '../components'
 import type { Column } from '../components'
 
 export default function Users() {
