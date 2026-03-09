@@ -849,46 +849,46 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 ## 16. Development Roadmap
 
-### Milestone 1 — Functional MVP (Target: Phase 1 complete)
-- [ ] Project scaffolding: go.mod, directory layout, Makefile
-- [ ] Config loading (viper: YAML + env vars)
-- [ ] bbolt metadata store
-- [ ] Local filesystem backend
-- [ ] S3 SigV4 authentication
-- [ ] Bucket CRUD (CreateBucket, DeleteBucket, ListBuckets, HeadBucket)
-- [ ] Object CRUD (PutObject, GetObject, DeleteObject, HeadObject, CopyObject)
-- [ ] ListObjectsV2 with pagination
-- [ ] Multipart upload
-- [ ] TLS (auto self-signed)
-- [ ] Health + readiness endpoints
-- [ ] Prometheus metrics
-- [ ] Structured logging (zerolog)
-- [ ] Basic cobra CLI (server, bucket, object, user)
-- [ ] Unit tests ≥ 80% coverage
-- [ ] Integration tests with minio-go
-- [ ] README and docs
+### Milestone 1 — Functional MVP ✅ Released as v0.1.0
+- [x] Project scaffolding: go.mod, directory layout, Makefile
+- [x] Config loading (viper: YAML + env vars)
+- [x] bbolt metadata store
+- [x] Local filesystem backend
+- [x] S3 SigV4 authentication
+- [x] Bucket CRUD (CreateBucket, DeleteBucket, ListBuckets, HeadBucket)
+- [x] Object CRUD (PutObject, GetObject, DeleteObject, HeadObject, CopyObject)
+- [x] ListObjectsV2 with pagination
+- [x] Multipart upload
+- [x] TLS (auto self-signed)
+- [x] Health + readiness endpoints
+- [x] Prometheus metrics
+- [x] Structured logging (zerolog)
+- [x] Basic cobra CLI (server, bucket, object, user)
+- [x] Unit tests ≥ 80% coverage
+- [x] Integration tests with minio-go
+- [x] README and docs
 
-### Milestone 2 — Production Hardening
-- [ ] Object versioning
-- [ ] Bucket ACLs + policies
-- [ ] Object tagging
-- [ ] Server-side encryption (AES-256-GCM)
-- [ ] Presigned URLs
-- [ ] CORS
-- [ ] Rate limiting
-- [ ] Audit logging
-- [ ] Web dashboard (React SPA embedded)
-- [ ] Lifecycle rules
-- [ ] `sangraha init` wizard
+### Milestone 2 — Production Hardening ✅ Released as v1.0.0
+- [x] Object versioning
+- [x] Bucket ACLs + policies
+- [x] Object tagging
+- [x] Server-side encryption (AES-256-GCM)
+- [x] Presigned URLs
+- [x] CORS
+- [x] Rate limiting
+- [x] Audit logging
+- [x] Web dashboard (React SPA embedded)
+- [x] Lifecycle rules
+- [x] `sangraha init` wizard
 
-### Milestone 3 — Scale & Enterprise
+### Milestone 3 — Scale & Enterprise ✅ Released as v2.0.0
 - [x] Object replication (async worker + S3 replication config API)
 - [x] Webhook event notifications (S3 notification config API + HMAC-signed delivery)
 - [x] Quota management (per-bucket size + object-count limits, enforced on PutObject/CompleteMultipart)
 - [x] Static website hosting (S3 website config API; index/error document + routing rules)
-- [ ] OIDC/LDAP integration
-- [ ] Multi-node clustering (Raft)
-- [ ] Storage tiering
+- [x] OIDC/LDAP integration (`internal/auth/oidc.go`, `internal/auth/ldap.go`; admin API ext in `internal/api/admin/auth_ext.go`)
+- [x] Multi-node clustering (Raft; `internal/cluster/` — cluster.go, handler.go, peer.go; admin cluster endpoints)
+- [x] Storage tiering (hot/warm/cold; `internal/backend/tiered/tiered.go`; configurable per-tier backends)
 
 ---
 
