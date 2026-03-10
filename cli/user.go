@@ -115,7 +115,7 @@ func runUserList(_ *cobra.Command, _ []string) error {
 	}
 
 	if flagJSON {
-		return json.NewEncoder(os.Stdout).Encode(users)
+		return json.NewEncoder(os.Stdout).Encode(users) //nolint:gosec // G117: access_key is an identifier, not a credential
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
