@@ -48,15 +48,15 @@ func init() {
 }
 
 // createUserResponse mirrors the admin API createUserResponse.
-type createUserResponse struct { //nolint:gosec // G101 false-positive: access_key is an identifier, not a credential
-	AccessKey string `json:"access_key"`
+type createUserResponse struct {
+	AccessKey string `json:"access_key"` //nolint:gosec // G101/G117: access_key is an identifier, not a credential
 	SecretKey string `json:"secret_key"`
 	Owner     string `json:"owner"`
 }
 
 // userInfo mirrors the admin API user listing entry.
-type userInfo struct { //nolint:gosec // G101 false-positive: access_key is an identifier, not a credential
-	AccessKey string `json:"access_key"`
+type userInfo struct {
+	AccessKey string `json:"access_key"` //nolint:gosec // G101/G117: access_key is an identifier, not a credential
 	Owner     string `json:"owner"`
 	IsRoot    bool   `json:"is_root"`
 }

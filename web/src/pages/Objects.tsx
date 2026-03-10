@@ -354,8 +354,8 @@ export default function Objects({ bucket }: ObjectsProps) {
         {!isLoading && !hasRows && (
           <EmptyState
             icon={<File size={40} />}
-            title="No objects here"
-            description="This prefix is empty. Upload files to get started."
+            title="No objects in this prefix."
+            description="Upload files to get started."
             action={
               <Button
                 variant="primary"

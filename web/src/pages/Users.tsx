@@ -10,6 +10,7 @@ export default function Users() {
   const [newOwner, setNewOwner] = useState('')
   const [flashMsg, setFlashMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [createdUser, setCreatedUser] = useState<User | null>(null)
+  const [lastOp, setLastOp] = useState<'create' | 'rotate'>('create')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const { data: users, isLoading, error } = useQuery({
@@ -22,6 +23,7 @@ export default function Users() {
     onSuccess: (user) => {
       qc.invalidateQueries({ queryKey: ['users'] })
       setNewOwner('')
+      setLastOp('create')
       setCreatedUser(user)
       setFlashMsg(null)
     },
@@ -42,6 +44,7 @@ export default function Users() {
     mutationFn: (ak: string) => api.users.rotateKey(ak),
     onSuccess: (user) => {
       qc.invalidateQueries({ queryKey: ['users'] })
+      setLastOp('rotate')
       setCreatedUser(user)
       setFlashMsg(null)
     },
@@ -131,7 +134,7 @@ export default function Users() {
 
       {createdUser && (
         <div className="bg-green-900/20 border border-success text-success rounded p-4 mb-4 text-sm">
-          <div className="font-semibold mb-1">{createdUser.secret_key ? 'User created!' : 'Key rotated!'}</div>
+          <div className="font-semibold mb-1">{lastOp === 'rotate' ? 'Key rotated!' : 'User created!'}</div>
           <div className="flex items-center gap-2">
             Access Key: <code className="bg-black/30 px-1 rounded">{createdUser.access_key}</code>
             <CopyButton value={createdUser.access_key} label="access key" />
