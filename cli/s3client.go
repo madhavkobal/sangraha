@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/tls"
@@ -56,7 +57,7 @@ func s3Do(method, bucket, key string, query url.Values, headers map[string]strin
 		rawURL += "?" + query.Encode()
 	}
 
-	req, err := http.NewRequest(method, rawURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, rawURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("build S3 request: %w", err)
 	}

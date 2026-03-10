@@ -59,11 +59,11 @@ type jwk struct {
 	Kid string `json:"kid"`
 	Use string `json:"use"`
 	Alg string `json:"alg"`
-	N   string `json:"n"` // RSA modulus (base64url)
-	E   string `json:"e"` // RSA exponent (base64url)
+	N   string `json:"n"`   // RSA modulus (base64url)
+	E   string `json:"e"`   // RSA exponent (base64url)
 	Crv string `json:"crv"` // EC curve
-	X   string `json:"x"` // EC x (base64url)
-	Y   string `json:"y"` // EC y (base64url)
+	X   string `json:"x"`   // EC x (base64url)
+	Y   string `json:"y"`   // EC y (base64url)
 }
 
 // jwksCache caches the JWKS document with a TTL.

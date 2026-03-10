@@ -48,7 +48,7 @@ func init() {
 }
 
 // createUserResponse mirrors the admin API createUserResponse.
-type createUserResponse struct {
+type createUserResponse struct { //nolint:gosec // G101 false-positive: access_key is an identifier, not a credential
 	AccessKey string `json:"access_key"`
 	SecretKey string `json:"secret_key"`
 	Owner     string `json:"owner"`

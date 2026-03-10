@@ -54,7 +54,7 @@ type MetadataConfig struct {
 
 // AuthConfig holds authentication settings.
 type AuthConfig struct {
-	RootAccessKey string          `mapstructure:"root_access_key"`
+	RootAccessKey string `mapstructure:"root_access_key"`
 	// RootSecretKey must be set via the SANGRAHA_ROOT_SECRET_KEY env var only.
 	RootSecretKey string          `mapstructure:"-"`
 	OIDC          auth.OIDCConfig `mapstructure:"oidc"`

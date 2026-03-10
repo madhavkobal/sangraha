@@ -35,12 +35,12 @@ type TierConfig struct {
 // accessRecord tracks when an object was last accessed for demotion decisions.
 type accessRecord struct {
 	lastAccess time.Time
-	tier       int // index into TieredBackend.tiers
+	tier       int // index into Backend.tiers
 }
 
-// TieredBackend is a backend.Backend that spreads objects across ordered tiers
+// Backend is a backend.Backend that spreads objects across ordered tiers
 // (hot → warm → cold). Reads promote objects back to the hot tier.
-type TieredBackend struct {
+type Backend struct {
 	tiers   []backend.Backend
 	configs []TierConfig
 	mu      sync.RWMutex
@@ -48,9 +48,9 @@ type TieredBackend struct {
 	access map[string]*accessRecord // key: "bucket/key"
 }
 
-// New creates a TieredBackend from an ordered slice of TierConfig values.
+// New creates a Backend from an ordered slice of TierConfig values.
 // At least one tier is required. The first tier is the hot tier.
-func New(tiers []TierConfig) (*TieredBackend, error) {
+func New(tiers []TierConfig) (*Backend, error) {
 	if len(tiers) == 0 {
 		return nil, fmt.Errorf("tiered: at least one tier is required")
 	}
@@ -70,7 +70,7 @@ func New(tiers []TierConfig) (*TieredBackend, error) {
 			return nil, fmt.Errorf("tiered: tier %d (%q): unsupported backend %q", i, tc.Name, tc.Backend)
 		}
 	}
-	return &TieredBackend{
+	return &Backend{
 		tiers:   backends,
 		configs: tiers,
 		access:  make(map[string]*accessRecord),
@@ -78,7 +78,7 @@ func New(tiers []TierConfig) (*TieredBackend, error) {
 }
 
 // Write stores the object in the hot (first) tier.
-func (t *TieredBackend) Write(ctx context.Context, bucket, key string, r io.Reader, size int64) (int64, error) {
+func (t *Backend) Write(ctx context.Context, bucket, key string, r io.Reader, size int64) (int64, error) {
 	n, err := t.tiers[0].Write(ctx, bucket, key, r, size)
 	if err != nil {
 		return 0, err
@@ -91,7 +91,7 @@ func (t *TieredBackend) Write(ctx context.Context, bucket, key string, r io.Read
 
 // Read retrieves the object from whichever tier contains it. If the object is
 // found in a lower tier it is promoted back to the hot tier.
-func (t *TieredBackend) Read(ctx context.Context, bucket, key string, w io.Writer) error {
+func (t *Backend) Read(ctx context.Context, bucket, key string, w io.Writer) error {
 	for i, b := range t.tiers {
 		ok, err := b.Exists(ctx, bucket, key)
 		if err != nil || !ok {
@@ -117,7 +117,7 @@ func (t *TieredBackend) Read(ctx context.Context, bucket, key string, w io.Write
 }
 
 // Delete removes the object from all tiers.
-func (t *TieredBackend) Delete(ctx context.Context, bucket, key string) error {
+func (t *Backend) Delete(ctx context.Context, bucket, key string) error {
 	var lastErr error
 	for _, b := range t.tiers {
 		if err := b.Delete(ctx, bucket, key); err != nil {
@@ -131,7 +131,7 @@ func (t *TieredBackend) Delete(ctx context.Context, bucket, key string) error {
 }
 
 // Exists checks if the object exists in any tier.
-func (t *TieredBackend) Exists(ctx context.Context, bucket, key string) (bool, error) {
+func (t *Backend) Exists(ctx context.Context, bucket, key string) (bool, error) {
 	for _, b := range t.tiers {
 		ok, err := b.Exists(ctx, bucket, key)
 		if err != nil {
@@ -145,7 +145,7 @@ func (t *TieredBackend) Exists(ctx context.Context, bucket, key string) (bool, e
 }
 
 // Stat returns metadata from whichever tier contains the object.
-func (t *TieredBackend) Stat(ctx context.Context, bucket, key string) (backend.ObjectInfo, error) {
+func (t *Backend) Stat(ctx context.Context, bucket, key string) (backend.ObjectInfo, error) {
 	for _, b := range t.tiers {
 		ok, err := b.Exists(ctx, bucket, key)
 		if err != nil {
@@ -161,7 +161,7 @@ func (t *TieredBackend) Stat(ctx context.Context, bucket, key string) (backend.O
 // RunDemotionWorker starts a background goroutine that periodically checks
 // objects in each tier and demotes them to the next tier when DemoteAfter has
 // elapsed since their last access.
-func (t *TieredBackend) RunDemotionWorker(ctx context.Context, interval time.Duration) {
+func (t *Backend) RunDemotionWorker(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 5 * time.Minute
 	}
@@ -180,7 +180,7 @@ func (t *TieredBackend) RunDemotionWorker(ctx context.Context, interval time.Dur
 }
 
 // runDemotion scans in-memory access records and demotes cold objects.
-func (t *TieredBackend) runDemotion(ctx context.Context) {
+func (t *Backend) runDemotion(ctx context.Context) {
 	t.mu.RLock()
 	snapshot := make(map[string]*accessRecord, len(t.access))
 	for k, v := range t.access {
@@ -231,17 +231,17 @@ func (t *TieredBackend) runDemotion(ctx context.Context) {
 }
 
 // promote copies an object from tier srcIdx to tier 0 (hot), then deletes it from srcIdx.
-func (t *TieredBackend) promote(ctx context.Context, bucket, key string, srcIdx int) error {
+func (t *Backend) promote(ctx context.Context, bucket, key string, srcIdx int) error {
 	return t.moveObject(ctx, bucket, key, srcIdx, 0)
 }
 
 // demote copies an object from tier srcIdx to tier dstIdx, then deletes it from srcIdx.
-func (t *TieredBackend) demote(ctx context.Context, bucket, key string, srcIdx, dstIdx int) error {
+func (t *Backend) demote(ctx context.Context, bucket, key string, srcIdx, dstIdx int) error {
 	return t.moveObject(ctx, bucket, key, srcIdx, dstIdx)
 }
 
 // moveObject copies object data from src tier to dst tier, then removes it from src.
-func (t *TieredBackend) moveObject(ctx context.Context, bucket, key string, srcIdx, dstIdx int) error {
+func (t *Backend) moveObject(ctx context.Context, bucket, key string, srcIdx, dstIdx int) error {
 	src := t.tiers[srcIdx]
 	dst := t.tiers[dstIdx]
 
@@ -261,7 +261,7 @@ func (t *TieredBackend) moveObject(ctx context.Context, bucket, key string, srcI
 }
 
 // recordAccess updates the in-memory last-access time for an object.
-func (t *TieredBackend) recordAccess(bucket, key string, tierIdx int) {
+func (t *Backend) recordAccess(bucket, key string, tierIdx int) {
 	k := bucket + "/" + key
 	t.mu.Lock()
 	if ar, ok := t.access[k]; ok {

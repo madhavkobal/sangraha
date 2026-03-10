@@ -121,15 +121,13 @@ func (p *LDAPProvider) dial() (*ldap.Conn, error) {
 	u := p.cfg.URL
 	switch {
 	case strings.HasPrefix(u, "ldaps://"):
-		host := strings.TrimPrefix(u, "ldaps://")
 		tlsCfg := &tls.Config{
 			InsecureSkipVerify: p.cfg.TLSInsecure, //nolint:gosec // operator-controlled setting; documented as unsafe
 			MinVersion:         tls.VersionTLS12,
 		}
-		return ldap.DialTLS("tcp", host, tlsCfg)
+		return ldap.DialURL(u, ldap.DialWithTLSConfig(tlsCfg))
 	case strings.HasPrefix(u, "ldap://"):
-		host := strings.TrimPrefix(u, "ldap://")
-		return ldap.Dial("tcp", host)
+		return ldap.DialURL(u)
 	default:
 		return nil, fmt.Errorf("ldap: unsupported URL scheme in %q (use ldap:// or ldaps://)", u)
 	}
