@@ -7,11 +7,11 @@ import (
 
 // statusResponse is the body for GET /admin/v1/cluster/status.
 type statusResponse struct {
-	NodeID  string   `json:"node_id"`
-	Role    NodeRole `json:"role"`
-	Leader  string   `json:"leader"`
-	Term    uint64   `json:"term"`
-	Peers   []string `json:"peers"`
+	NodeID string   `json:"node_id"`
+	Role   NodeRole `json:"role"`
+	Leader string   `json:"leader"`
+	Term   uint64   `json:"term"`
+	Peers  []string `json:"peers"`
 }
 
 // HandleStatus returns the current cluster status.

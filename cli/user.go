@@ -55,7 +55,7 @@ type createUserResponse struct {
 }
 
 // userInfo mirrors the admin API user listing entry.
-type userInfo struct {
+type userInfo struct { //nolint:gosec // G101 false-positive: access_key is an identifier, not a credential
 	AccessKey string `json:"access_key"`
 	Owner     string `json:"owner"`
 	IsRoot    bool   `json:"is_root"`

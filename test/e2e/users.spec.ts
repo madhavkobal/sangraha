@@ -260,7 +260,7 @@ test.describe('Users flows', () => {
     await deleteButtons.first().click()
 
     // Confirmation modal must appear.
-    await expect(page.getByRole('heading', { name: 'Delete user?' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Delete User' })).toBeVisible()
   })
 
   test('Delete confirmation modal shows the access key being deleted', async ({ page }) => {
@@ -287,11 +287,11 @@ test.describe('Users flows', () => {
     await goToUsers(page)
 
     await page.getByRole('button', { name: /Delete/ }).first().click()
-    await expect(page.getByRole('heading', { name: 'Delete user?' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Delete User' })).toBeVisible()
 
     await page.locator('.fixed').getByRole('button', { name: 'Cancel' }).click()
 
     // Modal must close.
-    await expect(page.getByRole('heading', { name: 'Delete user?' })).not.toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Delete User' })).not.toBeVisible()
   })
 })

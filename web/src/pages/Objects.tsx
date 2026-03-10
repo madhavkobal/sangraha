@@ -493,6 +493,7 @@ export default function Objects({ bucket }: ObjectsProps) {
             </span>
           }
           confirmText={deleteTarget.split('/').pop() ?? deleteTarget}
+          confirmLabel="Delete"
           onConfirm={() => deleteSingleMutation.mutate(deleteTarget)}
           onClose={() => setDeleteTarget(null)}
           isPending={deleteSingleMutation.isPending}

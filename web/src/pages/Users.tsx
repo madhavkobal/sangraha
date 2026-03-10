@@ -169,6 +169,7 @@ export default function Users() {
             </span>
           }
           confirmText={confirmDelete}
+          confirmLabel="Delete"
           onConfirm={() => deleteMut.mutate(confirmDelete)}
           onClose={() => setConfirmDelete(null)}
           isPending={deleteMut.isPending}

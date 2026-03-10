@@ -7,6 +7,8 @@ interface ConfirmDialogProps {
   message: React.ReactNode
   /** The user must type this exact string to enable the confirm button. */
   confirmText: string
+  /** Label for the confirm button. Defaults to "Confirm". */
+  confirmLabel?: string
   onConfirm: () => void
   onClose: () => void
   isPending?: boolean
@@ -18,6 +20,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmText,
+  confirmLabel = 'Confirm',
   onConfirm,
   onClose,
   isPending = false,
@@ -55,7 +58,7 @@ export default function ConfirmDialog({
             disabled={!isMatch || isPending}
             isLoading={isPending}
           >
-            Confirm
+            {confirmLabel}
           </Button>
         </div>
       </div>

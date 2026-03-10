@@ -172,4 +172,3 @@ func pollExportStatus(op string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 }
-

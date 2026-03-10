@@ -159,7 +159,8 @@ func runObjectGet(cmd *cobra.Command, args []string) error {
 
 	var dst io.Writer
 	if outputFile != "" {
-		f, err := os.Create(outputFile) //nolint:gosec // G304: operator-provided path
+		var f *os.File
+		f, err = os.Create(outputFile) //nolint:gosec // G304: operator-provided path
 		if err != nil {
 			return fmt.Errorf("create output file %s: %w", outputFile, err)
 		}

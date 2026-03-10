@@ -180,69 +180,68 @@ func (p *OIDCProvider) fetchJWKS(ctx context.Context) ([]jwk, error) {
 	return ks.Keys, nil
 }
 
-// VerifyIDToken validates an OIDC id_token JWT. It returns the subject
-// (email or sub claim) and the list of groups from the GroupsClaim.
-func (p *OIDCProvider) VerifyIDToken(ctx context.Context, rawToken string) (subject string, groups []string, err error) {
+// jwtHeader holds the decoded JOSE header fields we care about.
+type jwtHeader struct {
+	Alg string `json:"alg"`
+	Kid string `json:"kid"`
+}
+
+// parseRawJWT base64-decodes all three JWT parts and returns the structured
+// header, the raw claims map, the signing input (header.claims), and the
+// signature bytes. It does NOT verify the signature or validate any claims.
+func parseRawJWT(rawToken string) (jwtHeader, map[string]interface{}, string, []byte, error) {
 	parts := strings.Split(rawToken, ".")
 	if len(parts) != 3 {
-		return "", nil, errors.New("oidc: invalid JWT format")
+		return jwtHeader{}, nil, "", nil, errors.New("oidc: invalid JWT format")
 	}
 
-	// Decode header to find the key ID and algorithm.
 	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return "", nil, fmt.Errorf("oidc: decode header: %w", err)
+		return jwtHeader{}, nil, "", nil, fmt.Errorf("oidc: decode header: %w", err)
 	}
-	var header struct {
-		Alg string `json:"alg"`
-		Kid string `json:"kid"`
-	}
-	if err = json.Unmarshal(headerBytes, &header); err != nil {
-		return "", nil, fmt.Errorf("oidc: parse header: %w", err)
+	var hdr jwtHeader
+	if err = json.Unmarshal(headerBytes, &hdr); err != nil {
+		return jwtHeader{}, nil, "", nil, fmt.Errorf("oidc: parse header: %w", err)
 	}
 
-	// Decode claims.
 	claimsBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", nil, fmt.Errorf("oidc: decode claims: %w", err)
+		return jwtHeader{}, nil, "", nil, fmt.Errorf("oidc: decode claims: %w", err)
 	}
 	var claims map[string]interface{}
 	if err = json.Unmarshal(claimsBytes, &claims); err != nil {
-		return "", nil, fmt.Errorf("oidc: parse claims: %w", err)
+		return jwtHeader{}, nil, "", nil, fmt.Errorf("oidc: parse claims: %w", err)
 	}
 
-	// Verify standard claims.
+	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return jwtHeader{}, nil, "", nil, fmt.Errorf("oidc: decode signature: %w", err)
+	}
+	return hdr, claims, parts[0] + "." + parts[1], sigBytes, nil
+}
+
+// VerifyIDToken validates an OIDC id_token JWT. It returns the subject
+// (email or sub claim) and the list of groups from the GroupsClaim.
+func (p *OIDCProvider) VerifyIDToken(ctx context.Context, rawToken string) (subject string, groups []string, err error) {
+	hdr, claims, signingInput, sigBytes, err := parseRawJWT(rawToken)
+	if err != nil {
+		return "", nil, err
+	}
+
 	if err = p.verifyClaims(claims); err != nil {
 		return "", nil, err
 	}
 
-	// Fetch JWKS and verify signature.
 	keys, err := p.fetchJWKS(ctx)
 	if err != nil {
 		return "", nil, fmt.Errorf("oidc: fetch jwks: %w", err)
 	}
 
-	signingInput := parts[0] + "." + parts[1]
-	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return "", nil, fmt.Errorf("oidc: decode signature: %w", err)
+	if err = verifySignatureWithKeys(keys, hdr, []byte(signingInput), sigBytes); err != nil {
+		return "", nil, err
 	}
 
-	verified := false
-	for _, k := range keys {
-		if header.Kid != "" && k.Kid != header.Kid {
-			continue
-		}
-		if err = verifyJWKSignature(k, header.Alg, []byte(signingInput), sigBytes); err == nil {
-			verified = true
-			break
-		}
-	}
-	if !verified {
-		return "", nil, errors.New("oidc: signature verification failed")
-	}
-
-	// Extract subject.
+	// Extract subject (prefer email over sub).
 	sub, _ := claims["sub"].(string)
 	if email, ok := claims["email"].(string); ok && email != "" {
 		sub = email
@@ -251,9 +250,22 @@ func (p *OIDCProvider) VerifyIDToken(ctx context.Context, rawToken string) (subj
 		return "", nil, errors.New("oidc: missing sub claim")
 	}
 
-	// Extract groups from the configured claim.
 	groups = extractStringSlice(claims, p.cfg.GroupsClaim)
 	return sub, groups, nil
+}
+
+// verifySignatureWithKeys iterates over the JWKS keys and returns nil if any
+// key successfully verifies the signature.
+func verifySignatureWithKeys(keys []jwk, hdr jwtHeader, signingInput, sigBytes []byte) error {
+	for _, k := range keys {
+		if hdr.Kid != "" && k.Kid != hdr.Kid {
+			continue
+		}
+		if verifyJWKSignature(k, hdr.Alg, signingInput, sigBytes) == nil {
+			return nil
+		}
+	}
+	return errors.New("oidc: signature verification failed")
 }
 
 // verifyClaims checks iss, aud, and exp standard claims.

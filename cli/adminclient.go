@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -50,7 +51,8 @@ func adminDo(method, path string, body any) (*http.Response, error) {
 
 	var reqBody io.Reader
 	if body != nil {
-		data, err := json.Marshal(body)
+		var data []byte
+		data, err = json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshal request body: %w", err)
 		}
@@ -58,7 +60,7 @@ func adminDo(method, path string, body any) (*http.Response, error) {
 	}
 
 	url := strings.TrimRight(flagAdminURL, "/") + path
-	req, err := http.NewRequest(method, url, reqBody)
+	req, err := http.NewRequestWithContext(context.Background(), method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

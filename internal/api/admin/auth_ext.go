@@ -30,8 +30,8 @@ type oidcCallbackRequest struct {
 
 // oidcCallbackResponse is returned after a successful OIDC exchange.
 type oidcCallbackResponse struct {
-	Subject string `json:"subject"`
-	IsAdmin bool   `json:"is_admin"`
+	Subject string   `json:"subject"`
+	IsAdmin bool     `json:"is_admin"`
 	Groups  []string `json:"groups"`
 }
 

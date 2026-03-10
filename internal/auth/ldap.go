@@ -59,14 +59,14 @@ func (p *LDAPProvider) Authenticate(ctx context.Context, username, password stri
 	if err != nil {
 		return nil, fmt.Errorf("ldap: dial: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Respect context cancellation during blocking LDAP calls.
 	done := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
-			conn.Close()
+			_ = conn.Close()
 		case <-done:
 		}
 	}()
