@@ -252,8 +252,8 @@ test.describe('Storage — Buckets flows', () => {
 
     // Confirmation dialog appears.
     await expect(page.getByRole('heading', { name: 'Delete Bucket' })).toBeVisible()
-    // The dialog mentions the bucket name.
-    await expect(page.getByText('test-bucket')).toBeVisible()
+    // The dialog mentions the bucket name (scope to modal to avoid matching the table row).
+    await expect(page.locator('.fixed').getByText('test-bucket')).toBeVisible()
 
     // Delete button is disabled until the name is typed.
     const deleteBtn = page.locator('button:has-text("Delete"):not(:has-text("Cancel"))')

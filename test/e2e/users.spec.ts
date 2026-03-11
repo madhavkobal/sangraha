@@ -181,8 +181,8 @@ test.describe('Users flows', () => {
   test('Non-root user shows "user" role badge', async ({ page }) => {
     await goToUsers(page)
 
-    // bob is_root: false should have a "user" badge
-    await expect(page.getByText('user')).toBeVisible()
+    // bob is_root: false should have a "user" badge (exact match avoids matching "Users" heading/nav)
+    await expect(page.getByText('user', { exact: true })).toBeVisible()
   })
 
   test('Owner name input and Create User button are present', async ({ page }) => {
@@ -268,8 +268,8 @@ test.describe('Users flows', () => {
 
     await page.getByRole('button', { name: /Delete/ }).first().click()
 
-    // Modal body should reference the access key.
-    await expect(page.getByText('AKTEST001')).toBeVisible()
+    // Modal body should reference the access key (scope to the <code> element in the message).
+    await expect(page.locator('.fixed code').getByText('AKTEST001')).toBeVisible()
   })
 
   test('Delete confirmation modal has Cancel and Delete buttons', async ({ page }) => {
