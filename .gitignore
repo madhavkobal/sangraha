@@ -1,0 +1,36 @@
+# Build artifacts
+bin/
+sangraha
+coverage.out
+*.test
+
+# Web dashboard node_modules (never committed)
+web/node_modules/
+# TypeScript build info (regenerated on build)
+web/tsconfig.*.tsbuildinfo
+# Playwright / test runner output directories
+web/test-results/
+test/e2e/test-results/
+
+# Development TLS certificates
+certs/
+*.pem
+*.crt
+*.key
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime data directories (not committed)
+.sangraha/
+data/
+meta.db
+audit.log
+
+# Go workspace files
+go.work
+go.work.sum

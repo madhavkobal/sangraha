@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  go:
+    name: Go — vet / lint / test / build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Build web dashboard
+        run: cd web && npm ci && npm run build
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Download modules
+        run: go mod download
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Use latest stable release; avoids 404s from pinning non-existent versions
+          version: latest
+          args: --timeout=5m
+
+      - name: Unit tests (with race detector)
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+      - name: Build binary
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          go build \
+            -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+            -o bin/sangraha \
+            ./cmd/sangraha
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sangraha-linux-amd64
+          path: bin/sangraha
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sangraha-linux-amd64
+          path: bin/
+
+      - name: Make binary executable
+        run: chmod +x bin/sangraha
+
+      - name: Run integration tests
+        run: ./scripts/integration-test.sh
+
+  web:
+    name: Web dashboard — lint / build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          # cache and cache-dependency-path are omitted until web/package.json exists
+          # (Sprint 2.5-B); adding them without the lockfile causes a workflow error.
+
+      - name: Install dependencies
+        run: |
+          if [ -f web/package.json ]; then
+            cd web && npm ci
+          else
+            echo "web/package.json not yet present — skipping (Sprint 2.5-B)"
+          fi
+
+      - name: Lint
+        run: |
+          if [ -f web/package.json ]; then
+            cd web && npm run lint
+          else
+            echo "No web source — skipping lint"
+          fi
+
+      - name: Build
+        run: |
+          if [ -f web/package.json ]; then
+            cd web && npm run build
+          else
+            echo "No web source — skipping build"
+          fi
+
+  e2e:
+    name: Playwright e2e tests
+    runs-on: ubuntu-latest
+    needs: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install web dependencies
+        run: cd web && npm ci
+
+      - name: Install e2e dependencies
+        run: cd test/e2e && npm ci
+
+      - name: Install Playwright browsers
+        run: cd test/e2e && npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: cd test/e2e && npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test/e2e/playwright-report/
+          retention-days: 7

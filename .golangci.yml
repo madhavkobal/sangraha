@@ -1,0 +1,71 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - errcheck       # all errors must be handled
+    - govet          # correctness checks (shadow, printf, etc.)
+    - ineffassign    # unused assignments
+    - staticcheck    # comprehensive static analysis (covers unused code)
+    - gocyclo        # cyclomatic complexity limit
+    - gosec          # security anti-patterns
+    - misspell       # common spelling mistakes in comments/strings
+    - revive         # fast, configurable replacement for golint
+    - prealloc       # slice preallocation suggestions
+    - bodyclose      # HTTP response body must be closed
+    - noctx          # HTTP requests must use context
+
+  settings:
+    gocyclo:
+      min-complexity: 15
+
+    gosec:
+      excludes:
+        - G104  # allow errors in defer — handled explicitly elsewhere
+
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "sayRepetitiveInsteadOfStutters"
+
+    govet:
+      enable:
+        - shadow
+
+  exclusions:
+    rules:
+      # Test files are allowed to use unsafe patterns (e.g. t.Fatal in goroutines)
+      - path: "_test\\.go"
+        linters:
+          - gosec
+          - errcheck
+
+      # main.go is allowed to call os.Exit
+      - path: "cmd/sangraha/main\\.go"
+        linters:
+          - revive
+
+      # Third-party vendored code in web/node_modules is not subject to our lint rules.
+      - path: "web/node_modules/"
+        linters:
+          - gocyclo
+          - errcheck
+          - staticcheck
+          - govet
+          - revive
+          - gosec
+
+formatters:
+  enable:
+    - gofmt          # formatting compliance
+    - goimports      # import ordering
+
+  settings:
+    gofmt:
+      simplify: true
