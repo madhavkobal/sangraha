@@ -57,8 +57,7 @@ export default function Monitoring() {
         return next.length > 500 ? next.slice(next.length - 500) : next
       })
     }
-    setConnected(false)
-    return () => es.close()
+    return () => { es.close(); setConnected(false) }
   }, [levelFilter])
 
   useEffect(() => {
