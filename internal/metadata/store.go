@@ -7,6 +7,99 @@ import (
 	"time"
 )
 
+// BucketQuota constrains how much a bucket can hold.
+type BucketQuota struct {
+	MaxSizeBytes int64 `json:"max_size_bytes,omitempty"` // 0 = unlimited
+	MaxObjects   int64 `json:"max_objects,omitempty"`    // 0 = unlimited
+}
+
+// WebsiteConfig holds the static website hosting configuration for a bucket.
+type WebsiteConfig struct {
+	IndexDocument string               `json:"index_document,omitempty"` // e.g. "index.html"
+	ErrorDocument string               `json:"error_document,omitempty"` // e.g. "error.html"
+	RoutingRules  []WebsiteRoutingRule `json:"routing_rules,omitempty"`
+}
+
+// WebsiteRoutingRule redirects requests matching a condition.
+type WebsiteRoutingRule struct {
+	Condition WebsiteCondition `json:"condition"`
+	Redirect  WebsiteRedirect  `json:"redirect"`
+}
+
+// WebsiteCondition matches inbound website requests.
+type WebsiteCondition struct {
+	KeyPrefixEquals             string `json:"key_prefix_equals,omitempty"`
+	HTTPErrorCodeReturnedEquals string `json:"http_error_code_returned_equals,omitempty"`
+}
+
+// WebsiteRedirect describes the redirect target.
+type WebsiteRedirect struct {
+	HostName             string `json:"host_name,omitempty"`
+	Protocol             string `json:"protocol,omitempty"` // "http" or "https"
+	ReplaceKeyPrefixWith string `json:"replace_key_prefix_with,omitempty"`
+	ReplaceKeyWith       string `json:"replace_key_with,omitempty"`
+	HTTPRedirectCode     string `json:"http_redirect_code,omitempty"` // e.g. "301"
+}
+
+// NotificationConfig holds the S3-compatible bucket notification configuration.
+type NotificationConfig struct {
+	// QueueConfigurations and TopicConfigurations are stored for S3 compatibility
+	// but are not processed natively; use WebhookTargets for real delivery.
+	QueueConfigurations []NotificationTarget `json:"queue_configurations,omitempty"`
+	TopicConfigurations []NotificationTarget `json:"topic_configurations,omitempty"`
+	WebhookTargets      []WebhookTarget      `json:"webhook_targets,omitempty"`
+}
+
+// NotificationTarget is an S3-compatible notification target (SQS/SNS).
+type NotificationTarget struct {
+	ID     string              `json:"id"`
+	Arn    string              `json:"arn"`
+	Events []string            `json:"events"`
+	Filter *NotificationFilter `json:"filter,omitempty"`
+}
+
+// NotificationFilter restricts which object keys trigger notifications.
+type NotificationFilter struct {
+	KeyPrefixEquals string `json:"key_prefix_equals,omitempty"`
+	KeySuffixEquals string `json:"key_suffix_equals,omitempty"`
+}
+
+// WebhookTarget is a sangraha-native webhook notification destination.
+type WebhookTarget struct {
+	ID     string              `json:"id"`
+	URL    string              `json:"url"`
+	Events []string            `json:"events"`
+	Filter *NotificationFilter `json:"filter,omitempty"`
+	// Secret is sent as X-Sangraha-Signature HMAC-SHA256 for payload verification.
+	Secret string `json:"secret,omitempty"` //nolint:gosec // field name — not a hardcoded credential
+}
+
+// ReplicationConfig describes async object replication for a bucket.
+type ReplicationConfig struct {
+	Role  string            `json:"role,omitempty"` // ARN-style role (S3 compat; unused internally)
+	Rules []ReplicationRule `json:"rules,omitempty"`
+}
+
+// ReplicationRule describes one replication rule.
+type ReplicationRule struct {
+	ID                      string          `json:"id"`
+	Status                  string          `json:"status"` // "Enabled" | "Disabled"
+	Filter                  LifecycleFilter `json:"filter"`
+	Destination             ReplicationDest `json:"destination"`
+	DeleteMarkerReplication string          `json:"delete_marker_replication,omitempty"` // "Enabled" | "Disabled"
+}
+
+// ReplicationDest is the replication destination.
+type ReplicationDest struct {
+	// BucketARN is the destination bucket in ARN format (arn:aws:s3:::bucket-name)
+	// or sangraha URI (sangraha://host:port/bucket-name).
+	BucketARN    string `json:"bucket_arn"`
+	StorageClass string `json:"storage_class,omitempty"`
+	Endpoint     string `json:"endpoint,omitempty"` // base URL of destination sangraha
+	AccessKey    string `json:"access_key,omitempty"`
+	SecretKey    string `json:"secret_key,omitempty"` //nolint:gosec // not a hardcoded credential
+}
+
 // BucketRecord holds the persisted metadata for a bucket.
 type BucketRecord struct {
 	Name           string            `json:"name"`
@@ -22,6 +115,11 @@ type BucketRecord struct {
 	LifecycleRules []LifecycleRule   `json:"lifecycle_rules,omitempty"` // expiration rules
 	Tags           map[string]string `json:"tags,omitempty"`            // bucket tags
 	SSEAlgorithm   string            `json:"sse_algorithm,omitempty"`   // "AES256" or ""
+	// Phase 3 fields.
+	Quota         *BucketQuota        `json:"quota,omitempty"`         // storage quotas
+	Website       *WebsiteConfig      `json:"website,omitempty"`       // static website hosting
+	Notifications *NotificationConfig `json:"notifications,omitempty"` // event notifications
+	Replication   *ReplicationConfig  `json:"replication,omitempty"`   // object replication
 }
 
 // CORSRule describes an S3-compatible CORS rule.

@@ -163,7 +163,7 @@ func serveUntilSignal(cfg *config.Config, deps *serverDeps) error {
 	serverURL := scheme + "://" + addr
 
 	s3Handler := s3api.New(deps.engine, deps.keyStore, deps.auditor, rateLimitRPS)
-	adminHandler := adminapi.New(deps.keyStore, deps.engine, deps.auditor, binaryVersion, binaryBuildTime, serverURL, cfg)
+	adminHandler := adminapi.New(deps.keyStore, deps.engine, deps.auditor, binaryVersion, binaryBuildTime, serverURL, cfg, nil)
 
 	s3Srv := newHTTPServer(cfg.Server.S3Address, s3Handler)
 	adminSrv := newHTTPServer(cfg.Server.AdminAddress, adminHandler)

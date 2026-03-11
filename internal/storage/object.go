@@ -60,6 +60,11 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 		return PutObjectOutput{}, fmt.Errorf("put object: check bucket: %w", err)
 	}
 
+	// Enforce storage quota before writing any data.
+	if err = checkQuota(bucketRec, in.Size); err != nil {
+		return PutObjectOutput{}, err
+	}
+
 	body, sseAlg, encryptedKey, err := e.applySSE(in, bucketRec.SSEAlgorithm)
 	if err != nil {
 		return PutObjectOutput{}, err
@@ -100,11 +105,8 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 	}
 
 	if bucketRec.Versioning == VersioningEnabled {
-		if merr := e.meta.MarkVersionsNotLatest(ctx, in.Bucket, in.Key); merr != nil {
-			return PutObjectOutput{}, fmt.Errorf("put object: mark not latest: %w", merr)
-		}
-		if merr := e.putVersionRecord(ctx, rec, versionID, true); merr != nil {
-			return PutObjectOutput{}, fmt.Errorf("put object: store version: %w", merr)
+		if merr := e.storeVersioningMetadata(ctx, in.Bucket, in.Key, versionID, rec); merr != nil {
+			return PutObjectOutput{}, merr
 		}
 	}
 
@@ -114,7 +116,30 @@ func (e *Engine) PutObject(ctx context.Context, in PutObjectInput) (PutObjectOut
 	if err = e.meta.UpdateBucketStats(ctx, in.Bucket, deltaCount, deltaBytes); err != nil {
 		_ = err // non-fatal
 	}
+	e.fireObjectCreatedSideEffects(in.Bucket, in.Key, etag, in.Owner, n, bucketRec, EventObjectCreatedPut)
 	return PutObjectOutput{ETag: etag, VersionID: versionID, LastModified: now, Size: n, SSEAlgorithm: sseAlg}, nil
+}
+
+// storeVersioningMetadata marks previous versions as not-latest and records the new version.
+func (e *Engine) storeVersioningMetadata(ctx context.Context, bucket, key, versionID string, rec metadata.ObjectRecord) error {
+	if merr := e.meta.MarkVersionsNotLatest(ctx, bucket, key); merr != nil {
+		return fmt.Errorf("put object: mark not latest: %w", merr)
+	}
+	if merr := e.putVersionRecord(ctx, rec, versionID, true); merr != nil {
+		return fmt.Errorf("put object: store version: %w", merr)
+	}
+	return nil
+}
+
+// fireObjectCreatedSideEffects enqueues replication and webhook delivery after a successful object write.
+func (e *Engine) fireObjectCreatedSideEffects(bucket, key, etag, owner string, size int64, bucketRec metadata.BucketRecord, eventName EventType) {
+	if bucketRec.Replication != nil && e.replication != nil {
+		e.replication.Enqueue(bucket, key, bucketRec.Replication.Rules)
+	}
+	if bucketRec.Notifications != nil && e.webhooks != nil {
+		ev := buildObjectCreatedEvent(bucket, key, etag, owner, size, eventName)
+		e.webhooks.Dispatch(bucketRec.Notifications, ev)
+	}
 }
 
 // applySSE determines the SSE algorithm and wraps the body reader with encryption
@@ -294,6 +319,11 @@ func (e *Engine) DeleteObject(ctx context.Context, in DeleteObjectInput) (Delete
 	}
 
 	// Non-versioned: delete normally.
+	return e.deleteUnversionedObject(ctx, bkt, in)
+}
+
+// deleteUnversionedObject removes a non-versioned object from the backend and metadata store.
+func (e *Engine) deleteUnversionedObject(ctx context.Context, bkt metadata.BucketRecord, in DeleteObjectInput) (DeleteObjectOutput, error) {
 	rec, err := e.meta.GetObject(ctx, in.Bucket, in.Key)
 	if err != nil {
 		if isNotFound(err) {
@@ -315,6 +345,10 @@ func (e *Engine) DeleteObject(ctx context.Context, in DeleteObjectInput) (Delete
 		return DeleteObjectOutput{}, fmt.Errorf("delete object: metadata delete: %w", err)
 	}
 	_ = e.meta.UpdateBucketStats(ctx, in.Bucket, -1, -rec.Size)
+	if bkt.Notifications != nil && e.webhooks != nil {
+		ev := buildObjectRemovedEvent(in.Bucket, in.Key, in.Owner)
+		e.webhooks.Dispatch(bkt.Notifications, ev)
+	}
 	return DeleteObjectOutput{}, nil
 }
 

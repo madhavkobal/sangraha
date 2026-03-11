@@ -174,3 +174,59 @@ func (h *bucketAdminHandler) deleteObject(w http.ResponseWriter, r *http.Request
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// quotaRequest is the JSON body for PUT /admin/v1/buckets/{name}/quota.
+type quotaRequest struct {
+	MaxSizeBytes int64 `json:"max_size_bytes"`
+	MaxObjects   int64 `json:"max_objects"`
+}
+
+// getQuota handles GET /admin/v1/buckets/{name}/quota.
+func (h *bucketAdminHandler) getQuota(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	q, err := h.engine.GetBucketQuota(r.Context(), name)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	if q == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"quota": nil})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"max_size_bytes": q.MaxSizeBytes,
+		"max_objects":    q.MaxObjects,
+	})
+}
+
+// putQuota handles PUT /admin/v1/buckets/{name}/quota.
+func (h *bucketAdminHandler) putQuota(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	var req quotaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	q := &metadata.BucketQuota{
+		MaxSizeBytes: req.MaxSizeBytes,
+		MaxObjects:   req.MaxObjects,
+	}
+	if q.MaxSizeBytes == 0 && q.MaxObjects == 0 {
+		q = nil // remove quota
+	}
+	if err := h.engine.SetBucketQuota(r.Context(), name, q); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteQuota handles DELETE /admin/v1/buckets/{name}/quota (removes quota).
+func (h *bucketAdminHandler) deleteQuota(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if err := h.engine.SetBucketQuota(r.Context(), name, nil); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

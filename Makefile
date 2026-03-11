@@ -15,7 +15,7 @@ PLATFORMS  := \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: all build build-all web test lint vet clean release fmt help
+.PHONY: all build build-all web test lint vet clean release fmt e2e help
 
 ## build: Compile binary for current OS/arch into ./bin/sangraha
 build:
@@ -78,6 +78,12 @@ release: build-all
 	@cd $(BIN_DIR) && sha256sum $(BINARY)-* > SHA256SUMS
 	@echo "Release artifacts in $(BIN_DIR)/"
 	@cat $(BIN_DIR)/SHA256SUMS
+
+## e2e: Run Playwright e2e tests (auto-starts the Vite dev server)
+e2e:
+	@if [ ! -d web/node_modules ]; then cd web && npm ci; fi
+	@if [ ! -d test/e2e/node_modules ]; then cd test/e2e && npm ci; fi
+	cd test/e2e && npx playwright test
 
 ## help: Show this help message
 help:

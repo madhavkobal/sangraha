@@ -22,6 +22,8 @@ var (
 	flagSecretKey string
 	// flagJSON switches all output to machine-readable JSON.
 	flagJSON bool
+	// flagInsecure skips TLS certificate verification (operator use only).
+	flagInsecure bool
 )
 
 // rootCmd is the base command.
@@ -58,12 +60,14 @@ func init() {
 		envOrDefault("SANGRAHA_SECRET_KEY", ""),
 		"S3 secret key ($SANGRAHA_SECRET_KEY)")
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "output JSON instead of human-readable tables")
+	rootCmd.PersistentFlags().BoolVar(&flagInsecure, "insecure", false, "skip TLS certificate verification")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(bucketCmd)
 	rootCmd.AddCommand(objectCmd)
 	rootCmd.AddCommand(userCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(adminCmd)
 }
 
 func envOrDefault(key, def string) string {
